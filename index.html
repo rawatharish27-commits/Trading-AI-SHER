@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sher | AI Trading Intelligence</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              sher: {
+                dark: '#0f172a', // slate-900
+                card: '#1e293b', // slate-800
+                accent: '#3b82f6', // blue-500
+                success: '#10b981', // emerald-500
+                danger: '#f43f5e', // rose-500
+                text: '#f8fafc', // slate-50
+                muted: '#94a3b8', // slate-400
+              }
+            }
+          }
+        }
+      }
+    </script>
+    <style>
+      body {
+        background-color: #0f172a;
+        color: #f8fafc;
+        font-family: 'Inter', sans-serif;
+      }
+      /* Custom scrollbar for webkit */
+      ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+      }
+      ::-webkit-scrollbar-track {
+        background: #1e293b;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #475569;
+        border-radius: 4px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: #64748b;
+      }
+    </style>
+  <script type="importmap">
+{
+  "imports": {
+    "react": "https://aistudiocdn.com/react@^19.2.1",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.1/",
+    "react/": "https://aistudiocdn.com/react@^19.2.1/",
+    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.31.0",
+    "lucide-react": "https://aistudiocdn.com/lucide-react@^0.556.0",
+    "recharts": "https://aistudiocdn.com/recharts@^3.5.1",
+    "@prisma/client": "https://aistudiocdn.com/@prisma/client@^7.1.0",
+    "next-auth/": "https://aistudiocdn.com/next-auth@^4.24.13/",
+    "next-auth": "https://aistudiocdn.com/next-auth@^4.24.13",
+    "@next-auth/prisma-adapter": "https://aistudiocdn.com/@next-auth/prisma-adapter@^1.0.7",
+    "next/": "https://aistudiocdn.com/next@^16.0.7/",
+    "child_process": "https://aistudiocdn.com/child_process@^1.0.2",
+    "util": "https://aistudiocdn.com/util@^0.12.5"
+  }
+}
+</script>
+</head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html>
