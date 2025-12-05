@@ -1,3 +1,4 @@
+
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "../../../../lib/prisma";
 
@@ -11,8 +12,9 @@ export async function GET(req: NextRequest) {
 
   try {
     // 1. Try fetching from DB (Real Logic)
+    // We attempt to find the instrument and its associated LivePrice record
     const instrument = await prisma.instrument.findUnique({
-      where: { symbol },
+      where: { symbol: symbol.toUpperCase() },
       include: {
         livePrice: true,
       },
@@ -33,27 +35,34 @@ export async function GET(req: NextRequest) {
     }
 
     // 2. Fallback Mock Data (For Demo Resilience)
-    const mockPrice = symbol === 'NIFTY 50' ? 21500 : 
-                      symbol === 'BANK NIFTY' ? 48000 : 
-                      symbol === 'SENSEX' ? 71000 : 
+    // If DB is empty or symbol not found, return realistic mock data so the UI doesn't break
+    const mockPrice = symbol.toUpperCase() === 'NIFTY 50' ? 24500 : 
+                      symbol.toUpperCase() === 'BANK NIFTY' ? 52000 : 
+                      symbol.toUpperCase() === 'SENSEX' ? 79000 : 
                       1000 + Math.random() * 500;
                       
-    const mockChange = (Math.random() - 0.5) * 200;
+    const mockChange = (Math.random() - 0.5) * (mockPrice * 0.02); // +/- 1% movement
     
     return NextResponse.json({
-      symbol: symbol,
-      lastPrice: mockPrice + Math.random() * 10,
+      symbol: symbol.toUpperCase(),
+      lastPrice: mockPrice + Math.random() * 5,
       lastUpdated: new Date().toISOString(),
       change: mockChange,
       changePercent: (mockChange / mockPrice) * 100,
       dayOpen: mockPrice,
-      dayHigh: mockPrice + 100,
-      dayLow: mockPrice - 100,
-      dayVolume: 1000000
+      dayHigh: mockPrice * 1.01,
+      dayLow: mockPrice * 0.99,
+      dayVolume: Math.floor(Math.random() * 1000000)
     });
 
   } catch (error) {
     console.error("Live Price API Error:", error);
-    return NextResponse.json({ error: "Server error" }, { status: 500 });
+    // Return a mock response even on error to keep the dashboard alive during dev
+    return NextResponse.json({ 
+      symbol: symbol || "UNKNOWN",
+      lastPrice: 0,
+      lastUpdated: new Date().toISOString(),
+      error: "Data unavailable" 
+    }, { status: 500 });
   }
 }
