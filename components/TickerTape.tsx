@@ -40,14 +40,14 @@ const TickerTape: React.FC<TickerTapeProps> = ({ indices }) => {
 
       {/* Marquee Content */}
       <div className="flex animate-scroll whitespace-nowrap">
-        {Object.values(indices).map((tick) => (
+        {Object.values(indices).map((tick: MarketTick) => (
             <TickerItem key={tick.symbol} tick={tick} />
         ))}
         {/* Duplicate for seamless loop */}
-        {Object.values(indices).map((tick) => (
+        {Object.values(indices).map((tick: MarketTick) => (
             <TickerItem key={`${tick.symbol}-dup`} tick={tick} />
         ))}
-        {Object.values(indices).map((tick) => (
+        {Object.values(indices).map((tick: MarketTick) => (
             <TickerItem key={`${tick.symbol}-dup2`} tick={tick} />
         ))}
       </div>

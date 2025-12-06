@@ -1,50 +1,22 @@
+
 import React, { useState } from 'react';
 import { Plus, Trash2, ArrowUpRight, ArrowDownRight, MoreHorizontal } from 'lucide-react';
+import { WatchlistItem } from '../types';
 
-interface WatchlistItem {
-  id: string;
-  symbol: string;
-  name: string;
-  price: number;
-  change: number;
-  changePercent: number;
-  volume: string;
-  sector: string;
+interface WatchlistViewProps {
+  items: WatchlistItem[];
+  onAdd: (symbol: string) => void;
+  onRemove: (id: string) => void;
 }
 
-const MOCK_WATCHLIST: WatchlistItem[] = [
-  { id: '1', symbol: 'RELIANCE', name: 'Reliance Industries', price: 2480.50, change: 12.50, changePercent: 0.51, volume: '2.4M', sector: 'Energy' },
-  { id: '2', symbol: 'TCS', name: 'Tata Consultancy Svcs', price: 3890.00, change: -45.00, changePercent: -1.14, volume: '850K', sector: 'IT' },
-  { id: '3', symbol: 'HDFCBANK', name: 'HDFC Bank Ltd', price: 1612.00, change: 8.00, changePercent: 0.50, volume: '5.1M', sector: 'Finance' },
-  { id: '4', symbol: 'TATAMOTORS', name: 'Tata Motors', price: 810.25, change: 15.20, changePercent: 1.91, volume: '10M', sector: 'Auto' },
-  { id: '5', symbol: 'ADANIENT', name: 'Adani Enterprises', price: 2400.00, change: -20.00, changePercent: -0.83, volume: '1.2M', sector: 'Metals' },
-];
-
-const WatchlistView: React.FC = () => {
-  const [items, setItems] = useState<WatchlistItem[]>(MOCK_WATCHLIST);
+const WatchlistView: React.FC<WatchlistViewProps> = ({ items, onAdd, onRemove }) => {
   const [newSymbol, setNewSymbol] = useState('');
 
-  const handleAdd = (e: React.FormEvent) => {
+  const handleAddSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newSymbol) return;
-    
-    // Mock addition
-    const newItem: WatchlistItem = {
-      id: Date.now().toString(),
-      symbol: newSymbol.toUpperCase(),
-      name: newSymbol.toUpperCase() + ' Ltd',
-      price: 100.00,
-      change: 0,
-      changePercent: 0,
-      volume: '0',
-      sector: 'Unknown'
-    };
-    setItems([...items, newItem]);
+    onAdd(newSymbol);
     setNewSymbol('');
-  };
-
-  const handleRemove = (id: string) => {
-    setItems(items.filter(item => item.id !== id));
   };
 
   return (
@@ -55,7 +27,7 @@ const WatchlistView: React.FC = () => {
           <p className="text-sher-muted text-sm">Real-time tracking of potential opportunities.</p>
         </div>
         
-        <form onSubmit={handleAdd} className="flex gap-2">
+        <form onSubmit={handleAddSubmit} className="flex gap-2">
           <input 
             type="text" 
             value={newSymbol}
@@ -109,7 +81,7 @@ const WatchlistView: React.FC = () => {
                 </td>
                 <td className="px-6 py-4 text-center">
                   <button 
-                    onClick={() => handleRemove(item.id)}
+                    onClick={() => onRemove(item.id)}
                     className="text-gray-600 hover:text-sher-danger transition-colors p-2"
                   >
                     <Trash2 size={16} />

@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { ViewState } from './types';
+import { ViewState, WatchlistItem } from './types';
 import Sidebar from './components/Sidebar';
 import Dashboard from './components/Dashboard';
 import Portfolio from './components/Portfolio';
@@ -14,12 +14,24 @@ import SettingsView from './components/SettingsView';
 import { LayoutDashboard, Briefcase, Activity, Settings, Bell, LogOut, List, History } from 'lucide-react';
 import { useMarketStream } from './hooks/useMarketStream';
 
+// Initial Mock Data for Watchlist (Moved from WatchlistView)
+const INITIAL_WATCHLIST: WatchlistItem[] = [
+  { id: '1', symbol: 'RELIANCE', name: 'Reliance Industries', price: 2480.50, change: 12.50, changePercent: 0.51, volume: '2.4M', sector: 'Energy' },
+  { id: '2', symbol: 'TCS', name: 'Tata Consultancy Svcs', price: 3890.00, change: -45.00, changePercent: -1.14, volume: '850K', sector: 'IT' },
+  { id: '3', symbol: 'HDFCBANK', name: 'HDFC Bank Ltd', price: 1612.00, change: 8.00, changePercent: 0.50, volume: '5.1M', sector: 'Finance' },
+  { id: '4', symbol: 'TATAMOTORS', name: 'Tata Motors', price: 810.25, change: 15.20, changePercent: 1.91, volume: '10M', sector: 'Auto' },
+  { id: '5', symbol: 'ADANIENT', name: 'Adani Enterprises', price: 2400.00, change: -20.00, changePercent: -0.83, volume: '1.2M', sector: 'Metals' },
+];
+
 const App: React.FC = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [currentView, setCurrentView] = useState<ViewState>(ViewState.LOGIN);
   
   // Phase 4: Market Data Stream (Simulating Python Ingest Service)
   const { indices, equityData, currentEquity, isConnected } = useMarketStream(isAuthenticated);
+
+  // Shared Watchlist State
+  const [watchlist, setWatchlist] = useState<WatchlistItem[]>(INITIAL_WATCHLIST);
 
   const handleLogout = () => {
     setIsAuthenticated(false);
@@ -31,22 +43,52 @@ const App: React.FC = () => {
       setCurrentView(ViewState.DASHBOARD);
   };
 
+  const handleAddToWatchlist = (symbol: string) => {
+    const upperSymbol = symbol.toUpperCase();
+    if (watchlist.find(item => item.symbol === upperSymbol)) return;
+
+    // Create a mock item for the new symbol
+    const newItem: WatchlistItem = {
+      id: Date.now().toString(),
+      symbol: upperSymbol,
+      name: upperSymbol, // Simplified name
+      price: indices[upperSymbol.replace(/\s/g, '')]?.price || 1000 + Math.random() * 1000, // Use index price if matches or random
+      change: 0,
+      changePercent: 0,
+      volume: '0',
+      sector: 'Index/Stock'
+    };
+    setWatchlist([...watchlist, newItem]);
+  };
+
+  const handleRemoveFromWatchlist = (id: string) => {
+    setWatchlist(watchlist.filter(item => item.id !== id));
+  };
+
   const renderContent = () => {
     switch (currentView) {
       case ViewState.DASHBOARD:
-        return <Dashboard equityData={equityData} currentEquity={currentEquity} />;
+        return <Dashboard 
+          equityData={equityData} 
+          currentEquity={currentEquity} 
+          onAddToWatchlist={handleAddToWatchlist}
+        />;
       case ViewState.PORTFOLIO:
         return <Portfolio />;
       case ViewState.SIGNALS:
         return <SignalsView />;
       case ViewState.WATCHLIST:
-        return <WatchlistView />;
+        return <WatchlistView 
+          items={watchlist} 
+          onAdd={handleAddToWatchlist} 
+          onRemove={handleRemoveFromWatchlist} 
+        />;
       case ViewState.BACKTEST:
         return <BacktestView />;
       case ViewState.SETTINGS:
         return <SettingsView onLogout={handleLogout} />;
       default:
-        return <Dashboard equityData={equityData} currentEquity={currentEquity} />;
+        return <Dashboard equityData={equityData} currentEquity={currentEquity} onAddToWatchlist={handleAddToWatchlist} />;
     }
   };
 

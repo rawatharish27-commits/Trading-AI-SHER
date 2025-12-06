@@ -19,6 +19,17 @@ export interface Instrument {
   volume: number;
 }
 
+export interface WatchlistItem {
+  id: string;
+  symbol: string;
+  name: string;
+  price: number;
+  change: number;
+  changePercent: number;
+  volume: string;
+  sector: string;
+}
+
 export interface PortfolioItem {
   id: string;
   symbol: string;

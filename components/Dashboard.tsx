@@ -1,16 +1,17 @@
 
 import React from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { ArrowUpRight, ArrowDownRight, Wallet, Activity, TrendingUp } from 'lucide-react';
+import { ArrowUpRight, ArrowDownRight, Wallet, Activity, TrendingUp, Plus } from 'lucide-react';
 import { ChartDataPoint } from '../types';
 
 interface DashboardProps {
   equityData: ChartDataPoint[];
   currentEquity: number;
+  onAddToWatchlist: (symbol: string) => void;
 }
 
-const StatCard = ({ title, value, change, isPositive, icon: Icon }: any) => (
-  <div className="bg-sher-card border border-gray-800 rounded-xl p-5 hover:border-gray-700 transition-colors group">
+const StatCard = ({ title, value, change, isPositive, icon: Icon, action }: any) => (
+  <div className="bg-sher-card border border-gray-800 rounded-xl p-5 hover:border-gray-700 transition-colors group relative">
     <div className="flex justify-between items-start mb-4">
       <div className="p-2 bg-slate-800 rounded-lg text-sher-muted group-hover:text-sher-accent transition-colors">
         <Icon size={20} />
@@ -21,11 +22,18 @@ const StatCard = ({ title, value, change, isPositive, icon: Icon }: any) => (
       </div>
     </div>
     <h3 className="text-sher-muted text-sm font-medium">{title}</h3>
-    <p className="text-2xl font-bold text-white mt-1 tabular-nums transition-all duration-300">{value}</p>
+    <div className="flex items-center justify-between">
+       <p className="text-2xl font-bold text-white mt-1 tabular-nums transition-all duration-300">{value}</p>
+       {action && (
+         <div className="mt-1">
+           {action}
+         </div>
+       )}
+    </div>
   </div>
 );
 
-const Dashboard: React.FC<DashboardProps> = ({ equityData, currentEquity }) => {
+const Dashboard: React.FC<DashboardProps> = ({ equityData, currentEquity, onAddToWatchlist }) => {
   // Calculate P&L based on simulated start of day
   const startOfDay = 240000;
   const pnl = currentEquity - startOfDay;
@@ -54,7 +62,16 @@ const Dashboard: React.FC<DashboardProps> = ({ equityData, currentEquity }) => {
           value="4" 
           change="-1" 
           isPositive={false} 
-          icon={TrendingUp} 
+          icon={TrendingUp}
+          action={
+            <button 
+              onClick={() => onAddToWatchlist('NIFTY 50')}
+              className="p-1.5 bg-sher-accent/20 hover:bg-sher-accent/40 text-sher-accent rounded-lg transition-colors"
+              title="Add NIFTY 50 to Watchlist"
+            >
+              <Plus size={16} />
+            </button>
+          } 
         />
       </div>
 
