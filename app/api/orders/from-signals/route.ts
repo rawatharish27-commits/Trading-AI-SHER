@@ -24,21 +24,23 @@ export async function POST(req: NextRequest) {
     const tradeMode = mode === 'LIVE' ? 'LIVE' : 'PAPER';
 
     // 2. Fetch User Risk Settings
-    // We try to find existing settings or fall back to defaults safely
     let riskSettings = await prisma.riskSettings.findUnique({
       where: { userId }
     });
 
     if (!riskSettings) {
        // Defaults if not set
-       riskSettings = {
-         maxOpenPositions: 10,
-         allowShortSelling: false,
-         autoTradeEnabled: false,
-         maxRiskPerTradePct: 1,
-         maxDailyLossPct: 5,
-         maxCapitalPerTradePct: 20
-       } as any;
+       riskSettings = await prisma.riskSettings.create({
+         data: {
+            userId,
+            maxOpenPositions: 10,
+            allowShortSelling: false,
+            autoTradeEnabled: false,
+            maxRiskPerTradePct: 1,
+            maxDailyLossPct: 5,
+            maxCapitalPerTradePct: 20
+         }
+       });
     }
 
     // 3. Global Risk Checks
@@ -59,7 +61,6 @@ export async function POST(req: NextRequest) {
     }
 
     // 4. Fetch Signals Details
-    // In a real app, we might also filter by userId to ensure ownership
     const signals = await prisma.aiSignal.findMany({
       where: {
         id: { in: signalIds.map(String) }, 
@@ -77,12 +78,10 @@ export async function POST(req: NextRequest) {
 
     // 5. Execution Loop (Transactional per order to ensure data integrity)
     for (const signal of signals) {
-        // Map Signal Action to Order Side
         let side = 'BUY';
         if (signal.action === 'SELL' || signal.action === 'EXIT') side = 'SELL';
         
-        // Quantity Logic
-        // TODO: In Phase 7, calculate this dynamically based on 'riskSettings.maxRiskPerTradePct' and Stop Loss
+        // Basic quantity for V1
         const quantity = 10; 
 
         // Execute Transaction
@@ -106,8 +105,7 @@ export async function POST(req: NextRequest) {
 
             // --- PAPER TRADING SIMULATION ---
             if (tradeMode === 'PAPER') {
-                // 1. Determine Execution Price
-                // Try LivePrice first, fallback to last Candle, fallback to default
+                // Determine Execution Price (Live -> Candle -> Default)
                 let executionPrice = 0;
                 const livePrice = await tx.livePrice.findUnique({ where: { instrumentId: signal.instrumentId }});
                 
@@ -121,7 +119,7 @@ export async function POST(req: NextRequest) {
                     executionPrice = candle ? candle.close : 100.00;
                 }
 
-                // 2. Create Trade Record
+                // Create Trade Record
                 await tx.trade.create({
                     data: {
                         userId,
@@ -132,12 +130,12 @@ export async function POST(req: NextRequest) {
                         quantity,
                         price: executionPrice,
                         fees: 0,
-                        realizedPnl: 0, // Calculated upon closing
+                        realizedPnl: 0,
                         tradeTime: new Date()
                     }
                 });
 
-                // 3. Update Portfolio Position
+                // Update Portfolio Position
                 const existingPosition = await tx.position.findFirst({
                     where: {
                         portfolioId,
@@ -177,10 +175,7 @@ export async function POST(req: NextRequest) {
                         
                         if (newQty <= 0) {
                              // Close Position
-                             // Calculate PnL: (Exit Price - Avg Price) * Qty
                              const pnl = (executionPrice - existingPosition.avgPrice) * existingPosition.quantity;
-                             // Note: In a real app we'd update the Trade's realizedPnl here or in a separate ledger
-                             
                              await tx.position.update({
                                 where: { id: existingPosition.id },
                                 data: { quantity: 0, isClosed: true, closedAt: new Date() }
@@ -195,13 +190,13 @@ export async function POST(req: NextRequest) {
                     }
                 }
                 
-                // Update Order with final execution price
+                // Update Order
                 await tx.order.update({
                     where: { id: order.id },
                     data: { price: executionPrice }
                 });
 
-                // Log Audit Event
+                // Audit Log
                 await tx.auditLog.create({
                     data: {
                         userId,
@@ -215,7 +210,6 @@ export async function POST(req: NextRequest) {
             }
 
             // --- LIVE TRADING ---
-            // Create Audit Log for Pending Order
             await tx.auditLog.create({
                 data: {
                     userId,
