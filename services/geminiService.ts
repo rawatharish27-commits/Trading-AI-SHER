@@ -1,4 +1,5 @@
 import { GoogleGenAI } from "@google/genai";
+import { PortfolioItem, MarketTick } from "../types";
 
 // Initialize Gemini Client
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
@@ -64,5 +65,54 @@ export const analyzeBacktest = async (strategyName: string, winRate: number, dra
   } catch (error) {
     console.error("Gemini Backtest Analysis Error:", error);
     return "Could not analyze backtest data.";
+  }
+};
+
+export const analyzePortfolio = async (holdings: PortfolioItem[]): Promise<string> => {
+  if (!process.env.API_KEY) return "API Key is missing.";
+
+  try {
+    const summary = holdings.map(h => 
+      `- ${h.symbol}: ${h.quantity} units, P&L: ${h.pnlPercent}%`
+    ).join('\n');
+
+    const prompt = `
+      As an expert portfolio risk manager, analyze these holdings:
+      ${summary}
+      
+      Identify concentration risks and provide one strategic rebalancing suggestion. 
+      Keep it under 50 words.
+    `;
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: prompt,
+    });
+
+    return response.text || "Analysis unavailable.";
+  } catch (error) {
+    console.error("Gemini Portfolio Error:", error);
+    return "Failed to analyze portfolio.";
+  }
+};
+
+export const generateMarketBrief = async (indices: { [key: string]: MarketTick }): Promise<string> => {
+  if (!process.env.API_KEY) return "API Key missing.";
+
+  try {
+    const data = Object.values(indices).map(i => `${i.symbol}: ${i.changePercent.toFixed(2)}%`).join(', ');
+    const prompt = `
+      Market Check: ${data}. 
+      Give a 1-sentence witty market commentary in the style of a Wall Street veteran.
+    `;
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: prompt,
+    });
+
+    return response.text || "Market is moving.";
+  } catch (error) {
+    return "Market briefing unavailable.";
   }
 };

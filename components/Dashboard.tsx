@@ -1,13 +1,14 @@
-
 import React from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { ArrowUpRight, ArrowDownRight, Wallet, Activity, TrendingUp, Plus } from 'lucide-react';
-import { ChartDataPoint } from '../types';
+import { ArrowUpRight, ArrowDownRight, Wallet, Activity, TrendingUp, Plus, Bot } from 'lucide-react';
+import { ChartDataPoint, MarketTick } from '../types';
+import { generateMarketBrief } from '../services/geminiService';
 
 interface DashboardProps {
   equityData: ChartDataPoint[];
   currentEquity: number;
   onAddToWatchlist: (symbol: string) => void;
+  indices: { [key: string]: MarketTick };
 }
 
 const StatCard = ({ title, value, change, isPositive, icon: Icon, action }: any) => (
@@ -33,14 +34,35 @@ const StatCard = ({ title, value, change, isPositive, icon: Icon, action }: any)
   </div>
 );
 
-const Dashboard: React.FC<DashboardProps> = ({ equityData, currentEquity, onAddToWatchlist }) => {
+const Dashboard: React.FC<DashboardProps> = ({ equityData, currentEquity, onAddToWatchlist, indices }) => {
   // Calculate P&L based on simulated start of day
   const startOfDay = 240000;
   const pnl = currentEquity - startOfDay;
   const pnlPercent = (pnl / startOfDay) * 100;
 
+  const [marketBrief, setMarketBrief] = React.useState<string>("");
+
+  React.useEffect(() => {
+    if (Object.keys(indices).length > 0 && !marketBrief) {
+        generateMarketBrief(indices).then(setMarketBrief);
+    }
+  }, [indices]);
+
   return (
     <div className="space-y-6">
+      {/* AI Banner */}
+      {marketBrief && (
+          <div className="bg-gradient-to-r from-purple-900/40 to-slate-900/40 border border-purple-500/20 rounded-xl p-4 flex items-start gap-3 animate-in fade-in">
+              <div className="p-2 bg-purple-500/10 rounded-lg">
+                  <Bot size={20} className="text-purple-400" />
+              </div>
+              <div>
+                  <h3 className="text-sm font-bold text-purple-200">Sher Morning Brief</h3>
+                  <p className="text-sm text-sher-muted mt-1">{marketBrief}</p>
+              </div>
+          </div>
+      )}
+
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <StatCard 
@@ -86,7 +108,7 @@ const Dashboard: React.FC<DashboardProps> = ({ equityData, currentEquity, onAddT
              </div>
           </div>
           
-          <div className="h-72 w-full">
+          <div className="h-72 w-full min-w-0">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={equityData}>
                 <defs>

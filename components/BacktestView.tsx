@@ -205,7 +205,7 @@ const BacktestView: React.FC = () => {
               </div>
 
               {/* Chart */}
-              <div className="bg-sher-card border border-gray-800 rounded-xl p-6 h-[300px] shrink-0">
+              <div className="bg-sher-card border border-gray-800 rounded-xl p-6 h-[300px] shrink-0 min-w-0">
                 <h3 className="text-sm font-bold text-white mb-4">Equity Curve</h3>
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={result.equityCurve}>

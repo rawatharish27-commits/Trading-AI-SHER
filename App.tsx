@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { ViewState, WatchlistItem } from './types';
 import Sidebar from './components/Sidebar';
@@ -72,6 +71,7 @@ const App: React.FC = () => {
           equityData={equityData} 
           currentEquity={currentEquity} 
           onAddToWatchlist={handleAddToWatchlist}
+          indices={indices}
         />;
       case ViewState.PORTFOLIO:
         return <Portfolio />;
@@ -88,7 +88,12 @@ const App: React.FC = () => {
       case ViewState.SETTINGS:
         return <SettingsView onLogout={handleLogout} />;
       default:
-        return <Dashboard equityData={equityData} currentEquity={currentEquity} onAddToWatchlist={handleAddToWatchlist} />;
+        return <Dashboard 
+          equityData={equityData} 
+          currentEquity={currentEquity} 
+          onAddToWatchlist={handleAddToWatchlist}
+          indices={indices}
+        />;
     }
   };
 

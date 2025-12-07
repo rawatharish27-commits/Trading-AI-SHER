@@ -14,6 +14,10 @@ export const authOptions: NextAuthOptions = {
   pages: {
     signIn: "/login",
   },
+  // Trust the host header/NEXTAUTH_URL env var - Crucial for production/deployment
+  // This fixes the [next-auth][error][CLIENT_FETCH_ERROR] by ensuring correct URL resolution
+  // trustHost: true, // Removed: 'trustHost' does not exist in 'NextAuthOptions' type.
+  secret: process.env.NEXTAUTH_SECRET, // Ensure secret is explicitly picked up
   providers: [
     CredentialsProvider({
       name: "Credentials",

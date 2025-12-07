@@ -1,5 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { PortfolioItem } from '../types';
+import { Bot, Loader2, X } from 'lucide-react';
+import { analyzePortfolio } from '../services/geminiService';
 
 const MOCK_HOLDINGS: PortfolioItem[] = [
   { id: '1', symbol: 'RELIANCE', quantity: 25, avgPrice: 2450.00, currentPrice: 2480.50, pnl: 762.50, pnlPercent: 1.24 },
@@ -9,11 +11,37 @@ const MOCK_HOLDINGS: PortfolioItem[] = [
 ];
 
 const Portfolio: React.FC = () => {
+  const [analysis, setAnalysis] = useState<string | null>(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+
+  const handleAudit = async () => {
+    setIsAnalyzing(true);
+    const result = await analyzePortfolio(MOCK_HOLDINGS);
+    setAnalysis(result);
+    setIsAnalyzing(false);
+  };
+
   return (
     <div className="bg-sher-card border border-gray-800 rounded-xl overflow-hidden">
       <div className="p-6 border-b border-gray-800 flex justify-between items-center">
         <h2 className="text-lg font-bold text-white">Current Holdings</h2>
-        <span className="text-xs bg-slate-800 text-sher-muted px-2 py-1 rounded">Last updated: Just now</span>
+        <div className="flex gap-2">
+             {analysis && (
+                <div className="hidden md:flex items-center bg-purple-900/30 border border-purple-500/30 rounded-lg px-3 py-1 text-xs text-purple-200 animate-in fade-in max-w-md">
+                    <Bot size={14} className="mr-2 shrink-0" />
+                    {analysis}
+                    <button onClick={() => setAnalysis(null)} className="ml-2 hover:text-white"><X size={12}/></button>
+                </div>
+             )}
+             <button 
+                onClick={handleAudit}
+                disabled={isAnalyzing}
+                className="flex items-center gap-2 bg-sher-accent/10 hover:bg-sher-accent/20 text-sher-accent text-xs font-bold px-3 py-1.5 rounded-lg transition-colors border border-sher-accent/20"
+             >
+                {isAnalyzing ? <Loader2 size={14} className="animate-spin" /> : <Bot size={14} />}
+                {isAnalyzing ? 'Auditing...' : 'AI Audit'}
+             </button>
+        </div>
       </div>
       
       <div className="overflow-x-auto">
