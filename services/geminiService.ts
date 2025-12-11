@@ -1,5 +1,5 @@
-import { GoogleGenAI } from "@google/genai";
-import { PortfolioItem, MarketTick } from "../types";
+import { GoogleGenAI, Type } from "@google/genai";
+import { PortfolioItem, MarketTick, SymbolAnalysis, BacktestAnalysis } from "../types";
 
 // Initialize Gemini Client
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
@@ -41,9 +41,10 @@ export const analyzeStock = async (symbol: string, price: number, change: number
   }
 };
 
-export const analyzeBacktest = async (strategyName: string, winRate: number, drawdown: number, returnPct: number): Promise<string> => {
+export const analyzeBacktest = async (strategyName: string, winRate: number, drawdown: number, returnPct: number): Promise<BacktestAnalysis | null> => {
   if (!process.env.API_KEY) {
-    return "API Key is missing.";
+    console.error("API Key is missing.");
+    return null;
   }
 
   try {
@@ -53,18 +54,34 @@ export const analyzeBacktest = async (strategyName: string, winRate: number, dra
       - Max Drawdown: ${drawdown}%
       - Total Return: ${returnPct}%
 
-      Provide a critical assessment (max 3 bullet points). Is this strategy robust or overfitting? What are the risks?
+      Analyze the strategy for robustness, overfitting, and risk.
     `;
 
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
       contents: prompt,
+      config: {
+        responseMimeType: 'application/json',
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            riskScore: { type: Type.NUMBER, description: "Risk score 1-10 where 10 is extremely risky" },
+            verdict: { type: Type.STRING, enum: ["ROBUST", "RISKY", "OVERFITTED"] },
+            pros: { type: Type.ARRAY, items: { type: Type.STRING } },
+            cons: { type: Type.ARRAY, items: { type: Type.STRING } },
+            summary: { type: Type.STRING }
+          }
+        }
+      }
     });
 
-    return response.text || "Analysis unavailable.";
+    if (response.text) {
+        return JSON.parse(response.text) as BacktestAnalysis;
+    }
+    return null;
   } catch (error) {
     console.error("Gemini Backtest Analysis Error:", error);
-    return "Could not analyze backtest data.";
+    return null;
   }
 };
 
@@ -114,5 +131,29 @@ export const generateMarketBrief = async (indices: { [key: string]: MarketTick }
     return response.text || "Market is moving.";
   } catch (error) {
     return "Market briefing unavailable.";
+  }
+};
+
+/**
+ * Agent Tool: analyze_symbol
+ * Fetches historical data, builds features, and runs the Meta-Strategy Controller via the API.
+ */
+export const analyzeSymbol = async (symbol: string, startDate?: string, endDate?: string): Promise<SymbolAnalysis | null> => {
+  try {
+    const response = await fetch('/api/agent/analyze-symbol', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ symbol, startDate, endDate })
+    });
+    
+    if (!response.ok) {
+        console.error("Failed to analyze symbol:", await response.text());
+        return null;
+    }
+    
+    return await response.json();
+  } catch (e) {
+    console.error("Agent Tool Error:", e);
+    return null;
   }
 };

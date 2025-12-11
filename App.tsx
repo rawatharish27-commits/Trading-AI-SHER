@@ -29,6 +29,12 @@ const App: React.FC = () => {
   // Phase 4: Market Data Stream (Simulating Python Ingest Service)
   const { indices, equityData, currentEquity, isConnected } = useMarketStream(isAuthenticated);
 
+  // Calculate generic PnL for Sidebar display
+  // Using 245300 as base to match hook's initial state for consistency
+  const startOfDay = 245300;
+  const dailyPnl = currentEquity - startOfDay;
+  const dailyPnlPercent = (dailyPnl / startOfDay) * 100;
+
   // Shared Watchlist State
   const [watchlist, setWatchlist] = useState<WatchlistItem[]>(INITIAL_WATCHLIST);
 
@@ -39,7 +45,7 @@ const App: React.FC = () => {
 
   const handleLoginSuccess = () => {
       setIsAuthenticated(true);
-      setCurrentView(ViewState.DASHBOARD);
+      setCurrentView(ViewState.SIGNALS); // Changed from DASHBOARD to SIGNALS
   };
 
   const handleAddToWatchlist = (symbol: string) => {
@@ -115,7 +121,12 @@ const App: React.FC = () => {
     <div className="flex h-screen bg-sher-dark overflow-hidden font-sans">
       {/* Sidebar for Desktop */}
       <div className="hidden md:flex">
-        <Sidebar currentView={currentView} onViewChange={setCurrentView} />
+        <Sidebar 
+          currentView={currentView} 
+          onViewChange={setCurrentView} 
+          totalEquity={currentEquity}
+          todayChangePercent={dailyPnlPercent}
+        />
       </div>
 
       {/* Main Content Area */}

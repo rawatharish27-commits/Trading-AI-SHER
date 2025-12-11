@@ -5,9 +5,11 @@ import { LayoutDashboard, Briefcase, Activity, Settings, Zap, List, History } fr
 interface SidebarProps {
   currentView: ViewState;
   onViewChange: (view: ViewState) => void;
+  totalEquity?: number;
+  todayChangePercent?: number;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ currentView, onViewChange }) => {
+const Sidebar: React.FC<SidebarProps> = ({ currentView, onViewChange, totalEquity = 245300, todayChangePercent = 2.4 }) => {
   const menuItems = [
     { id: ViewState.DASHBOARD, label: 'Dashboard', icon: LayoutDashboard },
     { id: ViewState.SIGNALS, label: 'AI Signals', icon: Activity },
@@ -51,9 +53,11 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onViewChange }) => {
       <div className="p-4 border-t border-gray-800">
         <div className="bg-slate-900/50 rounded-lg p-3 border border-slate-800">
           <p className="text-xs text-sher-muted mb-1">Equity Value</p>
-          <p className="text-lg font-bold text-white">₹ 2,45,300.00</p>
-          <p className="text-xs text-sher-success mt-1 flex items-center gap-1">
-            +2.4% <span className="text-slate-500">today</span>
+          <p className="text-lg font-bold text-white">
+            ₹ {totalEquity.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          </p>
+          <p className={`text-xs mt-1 flex items-center gap-1 ${todayChangePercent >= 0 ? 'text-sher-success' : 'text-sher-danger'}`}>
+            {todayChangePercent > 0 ? '+' : ''}{todayChangePercent.toFixed(2)}% <span className="text-slate-500">today</span>
           </p>
         </div>
       </div>

@@ -1,9 +1,8 @@
-
 import React, { useState } from 'react';
-import { Play, RotateCcw, BarChart2, Calendar, Bot, Loader2, Activity, Clock, DollarSign, AlertCircle } from 'lucide-react';
+import { Play, RotateCcw, BarChart2, Calendar, Bot, Loader2, Activity, Clock, DollarSign, AlertCircle, CheckCircle, AlertTriangle } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { analyzeBacktest } from '../services/geminiService';
-import { BacktestResult } from '../types';
+import { BacktestResult, BacktestAnalysis } from '../types';
 
 interface ExtendedBacktestResult extends BacktestResult {
     tradeLogs: { time: string; pnl: number }[];
@@ -12,7 +11,7 @@ interface ExtendedBacktestResult extends BacktestResult {
 const BacktestView: React.FC = () => {
   const [isRunning, setIsRunning] = useState(false);
   const [result, setResult] = useState<ExtendedBacktestResult | null>(null);
-  const [aiAnalysis, setAiAnalysis] = useState<string | null>(null);
+  const [aiAnalysis, setAiAnalysis] = useState<BacktestAnalysis | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -76,8 +75,8 @@ const BacktestView: React.FC = () => {
   const handleAiAnalysis = async () => {
     if (!result) return;
     setIsAnalyzing(true);
-    const text = await analyzeBacktest(strategy, result.winRate, result.maxDrawdown, result.totalReturn);
-    setAiAnalysis(text);
+    const analysis = await analyzeBacktest(strategy, result.winRate, result.maxDrawdown, result.totalReturn);
+    setAiAnalysis(analysis);
     setIsAnalyzing(false);
   };
 
@@ -228,8 +227,11 @@ const BacktestView: React.FC = () => {
               </div>
 
               {/* AI Analysis */}
-              <div className="bg-slate-900 border border-dashed border-gray-700 rounded-xl p-6 shrink-0">
-                 <div className="flex justify-between items-center mb-4">
+              <div className="bg-slate-900 border border-dashed border-gray-700 rounded-xl p-6 shrink-0 relative overflow-hidden">
+                 <div className="absolute top-0 right-0 p-4 opacity-5">
+                     <Bot size={120} />
+                 </div>
+                 <div className="flex justify-between items-start mb-4 relative z-10">
                     <h3 className="text-lg font-bold text-white flex items-center gap-2">
                         <Bot size={20} className="text-purple-400" /> Sher Risk Assessment
                     </h3>
@@ -237,21 +239,62 @@ const BacktestView: React.FC = () => {
                         <button 
                             onClick={handleAiAnalysis}
                             disabled={isAnalyzing}
-                            className="text-xs bg-purple-600/20 text-purple-400 border border-purple-600/50 px-3 py-1.5 rounded-full hover:bg-purple-600/30 transition-colors"
+                            className="text-xs bg-purple-600/20 text-purple-400 border border-purple-600/50 px-3 py-1.5 rounded-full hover:bg-purple-600/30 transition-colors flex items-center gap-1"
                         >
+                            {isAnalyzing ? <Loader2 size={12} className="animate-spin" /> : <Bot size={12} />}
                             {isAnalyzing ? 'Analyzing...' : 'Generate Report'}
                         </button>
                     )}
                  </div>
                  
                  {aiAnalysis ? (
-                    <div className="text-gray-300 text-sm leading-relaxed animate-in fade-in">
-                        {aiAnalysis}
+                    <div className="space-y-4 animate-in fade-in relative z-10">
+                        <div className="flex items-center gap-4 border-b border-gray-800 pb-4">
+                            <div>
+                                <span className={`text-xs font-bold px-3 py-1 rounded-full border ${
+                                    aiAnalysis.verdict === 'ROBUST' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' :
+                                    aiAnalysis.verdict === 'RISKY' ? 'bg-amber-500/10 text-amber-400 border-amber-500/30' :
+                                    'bg-rose-500/10 text-rose-400 border-rose-500/30'
+                                }`}>
+                                    {aiAnalysis.verdict}
+                                </span>
+                            </div>
+                            <div className="h-2 flex-1 bg-gray-800 rounded-full overflow-hidden">
+                                <div 
+                                    className={`h-full rounded-full transition-all duration-1000 ${
+                                        aiAnalysis.riskScore <= 3 ? 'bg-emerald-500' : 
+                                        aiAnalysis.riskScore <= 7 ? 'bg-amber-500' : 'bg-rose-500'
+                                    }`} 
+                                    style={{ width: `${(aiAnalysis.riskScore / 10) * 100}%` }}
+                                ></div>
+                            </div>
+                            <span className="text-xs font-bold text-sher-muted">Risk: {aiAnalysis.riskScore}/10</span>
+                        </div>
+                        
+                        <p className="text-sm text-gray-300 leading-relaxed font-medium">{aiAnalysis.summary}</p>
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs mt-2">
+                            <div className="bg-slate-950/50 p-3 rounded-lg border border-gray-800/50">
+                                <h4 className="font-bold text-emerald-400 mb-2 flex items-center gap-1"><CheckCircle size={12}/> Strengths</h4>
+                                <ul className="space-y-1 text-sher-muted">
+                                    {aiAnalysis.pros.map((p, i) => <li key={i} className="flex gap-2"><span className="text-emerald-500/50">•</span> {p}</li>)}
+                                </ul>
+                            </div>
+                            <div className="bg-slate-950/50 p-3 rounded-lg border border-gray-800/50">
+                                <h4 className="font-bold text-rose-400 mb-2 flex items-center gap-1"><AlertTriangle size={12}/> Risks</h4>
+                                <ul className="space-y-1 text-sher-muted">
+                                    {aiAnalysis.cons.map((c, i) => <li key={i} className="flex gap-2"><span className="text-rose-500/50">•</span> {c}</li>)}
+                                </ul>
+                            </div>
+                        </div>
                     </div>
                  ) : (
-                    <p className="text-sher-muted text-sm italic">
-                        Generate an AI report to detect overfitting or hidden risks in this strategy.
-                    </p>
+                    <div className="flex flex-col items-center justify-center py-6 text-sher-muted/50 gap-2 relative z-10">
+                        <Activity size={32} />
+                        <p className="text-sm italic">
+                            Generate an AI report to detect overfitting or hidden risks in this strategy.
+                        </p>
+                    </div>
                  )}
               </div>
 

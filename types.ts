@@ -128,9 +128,36 @@ export interface BacktestResult {
   equityCurve: ChartDataPoint[];
 }
 
+export interface BacktestAnalysis {
+  riskScore: number;
+  verdict: 'ROBUST' | 'RISKY' | 'OVERFITTED';
+  pros: string[];
+  cons: string[];
+  summary: string;
+}
+
 export interface RiskConfig {
   maxCapitalPerTrade: number;
   maxDailyLoss: number;
   maxOpenPositions: number;
   stopLossDefault: number; // Percentage
+}
+
+// --- Phase 8: Agent Tools ---
+
+export interface SymbolAnalysis {
+  symbol: string;
+  regime: 'BULL' | 'BEAR' | 'SIDEWAYS' | 'VOLATILE';
+  forecast: {
+    up: number;
+    down: number;
+    flat: number;
+  };
+  strategySuitability: {
+    momentum: number;
+    meanReversion: number;
+    breakout: number;
+  };
+  explanation: string;
+  timestamp: string;
 }
