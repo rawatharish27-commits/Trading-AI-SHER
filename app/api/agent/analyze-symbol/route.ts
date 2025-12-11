@@ -1,6 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { GoogleGenAI, Type } from "@google/genai";
 import { prisma } from "../../../../lib/prisma";
+import { 
+    SMACrossRSIStrategy, 
+    RSIBollingerStrategy, 
+    RangeBreakoutStrategy, 
+    StrategyContext, 
+    MarketRegime 
+} from "../../../../lib/strategies";
+import { MarketForecaster } from "../../../../lib/forecaster";
 
 // Initialize Gemini
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
@@ -98,7 +106,43 @@ export async function POST(req: NextRequest) {
     const volatility = calculateVolatility(prices);
     const momentum = prices[prices.length - 1] - prices[prices.length - 5];
 
-    // 3. Run Meta-Strategy Controller (Via Gemini)
+    // 3. Determine Market Regime Programmatically
+    let regime: MarketRegime = 'SIDEWAYS';
+    if (volatility > 0.025) {
+        regime = 'VOLATILE';
+    } else if (currentPrice > sma50 && sma20 > sma50) {
+        regime = 'BULL';
+    } else if (currentPrice < sma50 && sma20 < sma50) {
+        regime = 'BEAR';
+    }
+
+    // 4. Calculate Algorithmic Strategy Scores
+    const ctx: StrategyContext = { prices, rsi, volatility, sma20, sma50, regime };
+    
+    const momentumStrategy = new SMACrossRSIStrategy();
+    const meanRevStrategy = new RSIBollingerStrategy();
+    const breakoutStrategy = new RangeBreakoutStrategy();
+
+    const scores = {
+        momentum: momentumStrategy.suitabilityScore(ctx),
+        meanReversion: meanRevStrategy.suitabilityScore(ctx),
+        breakout: breakoutStrategy.suitabilityScore(ctx)
+    };
+
+    // 5. Run Quantitative Market Forecast
+    // Tries to use ML models, falls back to Heuristic if unavailable
+    const forecaster = new MarketForecaster();
+    const forecast = await forecaster.predict({
+        rsi,
+        volatility,
+        momentum,
+        sma20,
+        sma50,
+        currentPrice
+    });
+
+    // 6. Run Meta-Strategy Controller (Via Gemini)
+    // We pass the algorithmic scores AND the forecast as a baseline for the AI to refine
     const prompt = `
       Act as a Meta-Strategy Controller for an algorithmic trading system.
       Analyze the following market data for ${symbolUpper}:
@@ -110,11 +154,21 @@ export async function POST(req: NextRequest) {
       - RSI (14): ${rsi.toFixed(2)}
       - Volatility (20d): ${(volatility * 100).toFixed(2)}%
       - Momentum (5d): ${momentum.toFixed(2)}
+      
+      Algorithmic Detection:
+      - Detected Regime: ${regime}
+      - Base Scores (0-10): Momentum=${scores.momentum}, MeanRev=${scores.meanReversion}, Breakout=${scores.breakout}
+
+      Quantitative Forecast Model (${forecast.source}):
+      - Direction: ${forecast.direction}
+      - Confidence: ${(forecast.probability * 100).toFixed(1)}%
+      - Predicted Return: ${forecast.predictedReturn}%
 
       Tasks:
-      1. Determine the Market Regime (BULL, BEAR, SIDEWAYS, or VOLATILE).
-      2. Forecast probabilities for next movement (Up, Down, Flat) summing to 1.
-      3. Rate suitability (0-10) for strategies: Momentum, Mean Reversion, Breakout.
+      1. Confirm or adjust the Market Regime (BULL, BEAR, SIDEWAYS, VOLATILE).
+      2. Forecast probabilities for next 24h movement (Up, Down, Flat) summing to 1.
+         (Consider the ${forecast.source} model's prediction of ${forecast.direction} but use your reasoning).
+      3. Refine the strategy suitability scores based on the holistic technical picture.
       4. Provide a 2-sentence explanation of your decision logic.
     `;
 
