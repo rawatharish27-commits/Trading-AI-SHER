@@ -28,9 +28,10 @@ export async function POST(req: NextRequest) {
 
     try {
       // Execute the Python script using python3 and pipe config to stdin
+      // Using -m module syntax ensures relative imports in the python package work if needed
+      const pythonProcess = spawn("python3", ["-m", "sher.backtest.run_cli"]);
+      
       const result = await new Promise<any>((resolve, reject) => {
-        const pythonProcess = spawn("python3", ["-m", "sher.backtest.run_cli"]);
-        
         let stdout = "";
         let stderr = "";
 
@@ -102,7 +103,8 @@ export async function POST(req: NextRequest) {
             time: date.toISOString(),
             pnl: tradePnL,
             type: tradePnL > 0 ? "SELL" : "SELL", // All closed trades
-            price: 1000 + Math.random()*500
+            price: 1000 + Math.random()*500,
+            symbol: symbol
           });
           if (tradePnL > 0) winCount++;
         }
