@@ -1,11 +1,7 @@
-
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "../../../../lib/auth";
-import { promisify } from "util";
-import { execFile } from "child_process";
-
-const execFileAsync = promisify(execFile);
+import { spawn } from "child_process";
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -22,37 +18,60 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "symbol & strategyCode required" }, { status: 400 });
     }
 
-    // Arguments for running the Python backtest module
-    // We expect the 'python3' executable to be available in the environment
-    const args = [
-      "-m",
-      "sher.backtest.run_cli",
-      `--symbol=${symbol}`,
-      `--strategy-code=${strategyCode}`,
-      `--time-frame=${timeFrame || "1d"}`,
-      `--lookback=${lookback || 365}`,
-      `--initial-capital=${initialCapital || 100000}`,
-    ];
+    const config = {
+      symbol,
+      strategyCode,
+      timeFrame: timeFrame || "1d",
+      lookback: lookback || 365,
+      initialCapital: initialCapital || 100000
+    };
 
     try {
-      // Execute the Python script using python3
-      // CWD is usually project root, so 'sher' package is found
-      const { stdout, stderr } = await execFileAsync("python3", args, {
-        maxBuffer: 1024 * 1024 * 5 // 5MB buffer for large datasets
+      // Execute the Python script using python3 and pipe config to stdin
+      const result = await new Promise<any>((resolve, reject) => {
+        const pythonProcess = spawn("python3", ["-m", "sher.backtest.run_cli"]);
+        
+        let stdout = "";
+        let stderr = "";
+
+        pythonProcess.stdout.on("data", (data) => {
+          stdout += data.toString();
+        });
+
+        pythonProcess.stderr.on("data", (data) => {
+          stderr += data.toString();
+        });
+
+        pythonProcess.on("close", (code) => {
+          if (code !== 0) {
+            console.warn("Python script exited with code", code, stderr);
+            // Don't reject immediately, let fallback handle it if stderr implies missing deps
+            reject(new Error(stderr || `Python script exited with code ${code}`));
+            return;
+          }
+          try {
+            const json = JSON.parse(stdout);
+            resolve(json);
+          } catch (e) {
+            reject(new Error("Failed to parse Python output: " + stdout));
+          }
+        });
+
+        pythonProcess.on("error", (err) => {
+          reject(err);
+        });
+
+        // Write config to stdin
+        pythonProcess.stdin.write(JSON.stringify(config));
+        pythonProcess.stdin.end();
       });
 
-      if (stderr) {
-        console.warn("Backtest Script Warning:", stderr);
-      }
-
-      // Return the raw JSON output from the Python script
-      const result = JSON.parse(stdout);
       return NextResponse.json(result);
 
-    } catch (execError: any) {
-      console.error("Python execution failed. Running in simulation fallback mode.", execError.message);
+    } catch (pythonError: any) {
+      console.error("Python execution failed. Running in simulation fallback mode.", pythonError.message);
 
-      // --- FALLBACK JS SIMULATION (If Python fails or is missing) ---
+      // --- FALLBACK JS SIMULATION ---
       // This ensures the user always sees results even if the python env isn't set up perfectly
       const capital = Number(initialCapital) || 100000;
       let currentEquity = capital;
