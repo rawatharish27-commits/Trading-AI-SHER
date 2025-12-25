@@ -43,4 +43,14 @@ export class TickFirewall {
 
     return { valid: true };
   }
+
+  // REAL WS vs FAKE DATA DETECTOR
+  static isRealAngelTick(tick: any): boolean {
+    return (
+      tick.exchange === "NSE" &&
+      tick.token &&
+      typeof tick.last_traded_price === "number" &&
+      Math.abs(Date.now() - tick.timestamp) < 2000
+    );
+  }
 }

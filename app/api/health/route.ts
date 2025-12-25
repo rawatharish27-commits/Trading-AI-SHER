@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { scripMasterService } from "../../../lib/services/scripMasterService";
 import { warmupService } from "../../../lib/services/warmupService";
 import { prisma } from "../../../lib/prisma";
+import { SessionEngine } from "../../../lib/market/sessionEngine";
 
 /**
  * ❤️ ENHANCED HEALTH PROBE
@@ -15,6 +16,10 @@ export async function GET() {
 
   await prisma.user.findFirst();
 
+  // HEALTH & LIVENESS (MANDATORY)
+  const marketStatus = SessionEngine.isMarketHours() ? "open" : "closed";
+  const brokerStatus = "disconnected"; // Placeholder until brokerConfigService is implemented
+
   return NextResponse.json({
     db: "connected",
     status,
@@ -23,6 +28,8 @@ export async function GET() {
     uptime: (process as any).uptime(),
     node: process.env.K_REVISION || "SHER_ALPHA_LOCAL",
     warmth: warmupService.getStatus(),
+    market: marketStatus,
+    broker: brokerStatus,
     diagnostics: {
       scripMaster: scripMasterService.isReady ? "SYNCED" : "SYNCHRONIZING",
       dbProxy: "CONNECTED",
