@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { scripMasterService } from "../../../lib/services/scripMasterService";
 import { warmupService } from "../../../lib/services/warmupService";
+import { prisma } from "../../../lib/prisma";
 
 /**
  * ❤️ ENHANCED HEALTH PROBE
@@ -9,10 +10,13 @@ import { warmupService } from "../../../lib/services/warmupService";
 export async function GET() {
   const criticalEnv = ["API_KEY", "DATABASE_URL", "ANGEL_ONE_API_KEY"];
   const missing = criticalEnv.filter(key => !process.env[key]);
-  
+
   const status = missing.length === 0 ? "ok" : "degraded";
-  
+
+  await prisma.user.findFirst();
+
   return NextResponse.json({
+    db: "connected",
     status,
     timestamp: new Date().toISOString(),
     // Fixed: Cast process to any to access Node.js-specific uptime() method to resolve TypeScript property access error.
