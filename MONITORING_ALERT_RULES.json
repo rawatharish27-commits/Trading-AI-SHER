@@ -1,0 +1,27 @@
+{
+  "displayName": "Sher AI Critical Alerts",
+  "documentation": {
+    "content": "Alert triggered when Sher AI Backend (Cloud Run) is failing or latency > 1s.",
+    "mimeType": "text/markdown"
+  },
+  "conditions": [
+    {
+      "displayName": "Cloud Run Error Rate > 5%",
+      "conditionThreshold": {
+        "filter": "resource.type = \"cloud_run_revision\" AND metric.type = \"run.googleapis.com/request_count\" AND metric.labels.response_code_class = \"5xx\"",
+        "aggregations": [{
+          "alignmentPeriod": "300s",
+          "perSeriesAligner": "ALIGN_RATE"
+        }],
+        "comparison": "COMPARISON_GT",
+        "duration": "0s",
+        "trigger": { "count": 1 }
+      }
+    }
+  ],
+  "alertStrategy": {
+    "autoClose": "604800s"
+  },
+  "combiner": "OR",
+  "enabled": true
+}

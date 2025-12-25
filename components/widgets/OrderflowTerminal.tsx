@@ -1,0 +1,93 @@
+
+import React from 'react';
+import { MarketDepth, FootprintBar } from '../../types';
+import { Layers, Zap, AlertTriangle, ShieldCheck, Activity } from 'lucide-react';
+
+interface OrderflowTerminalProps {
+  depth: MarketDepth;
+  footprint: FootprintBar[];
+}
+
+const OrderflowTerminal: React.FC<OrderflowTerminalProps> = ({ depth, footprint }) => {
+  const imbalancePct = ((depth.imbalance + 1) / 2) * 100;
+
+  return (
+    <div className="bg-panel border border-border rounded-3xl overflow-hidden shadow-2xl flex flex-col h-full animate-in fade-in duration-500">
+      <div className="p-5 border-b border-border bg-slate-900/60 flex justify-between items-center">
+        <h3 className="text-[10px] font-black text-white uppercase tracking-[0.2em] flex items-center gap-2">
+          <Layers size={14} className="text-sher-accent" /> Institutional DOM
+        </h3>
+        {depth.spoofingDetected && (
+          <div className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-rose-500/10 text-rose-500 border border-rose-500/20 text-[8px] font-black animate-pulse">
+            <AlertTriangle size={10} /> SPOOFING
+          </div>
+        )}
+      </div>
+
+      <div className="p-5 space-y-6 flex-1 overflow-y-auto custom-scrollbar">
+        {/* Imbalance Meter */}
+        <div className="space-y-2">
+          <div className="flex justify-between text-[8px] font-black uppercase">
+             <span className="text-emerald-400">Buying (Bids)</span>
+             <span className="text-rose-400">Selling (Asks)</span>
+          </div>
+          <div className="h-2 w-full bg-slate-900 rounded-full overflow-hidden flex border border-white/5">
+             <div className="h-full bg-emerald-500 transition-all duration-700" style={{ width: `${imbalancePct}%` }} />
+             <div className="h-full bg-rose-500 transition-all duration-700" style={{ width: `${100 - imbalancePct}%` }} />
+          </div>
+        </div>
+
+        {/* DOM Table */}
+        <div className="grid grid-cols-2 gap-px bg-white/5 rounded-xl overflow-hidden border border-white/5">
+           <div className="bg-slate-950 p-3">
+              {depth.bids.map((b, i) => (
+                <div key={i} className="flex justify-between text-[10px] font-mono mb-1">
+                  <span className="text-emerald-400/60">{b.price.toFixed(2)}</span>
+                  <span className="text-white font-bold">{b.qty}</span>
+                </div>
+              ))}
+           </div>
+           <div className="bg-slate-950 p-3 text-right">
+              {depth.asks.map((a, i) => (
+                <div key={i} className="flex justify-between text-[10px] font-mono mb-1">
+                  <span className="text-white font-bold">{a.qty}</span>
+                  <span className="text-rose-400/60">{a.price.toFixed(2)}</span>
+                </div>
+              ))}
+           </div>
+        </div>
+
+        {/* Footprint Delta */}
+        <div className="space-y-3">
+          <p className="text-[9px] font-black text-sher-muted uppercase tracking-widest flex items-center gap-2">
+            <Activity size={10}/> Footprint Node
+          </p>
+          <div className="space-y-1.5">
+            {footprint.slice(0, 8).map((f, i) => (
+              <div key={i} className="flex items-center gap-3">
+                <span className="text-[9px] font-mono text-gray-500 w-12">{f.price.toFixed(1)}</span>
+                <div className="flex-1 h-3 bg-slate-900 rounded flex overflow-hidden border border-white/5">
+                   <div className="h-full bg-emerald-500/30" style={{ width: `${(f.buyVol / 500) * 100}%` }} />
+                   <div className="h-full bg-rose-500/30" style={{ width: `${(f.sellVol / 500) * 100}%` }} />
+                </div>
+                <span className={`text-[9px] font-black w-8 text-right tabular-nums ${f.delta >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                  {f.delta}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="p-4 bg-slate-950 border-t border-border flex items-center justify-between">
+         <div className="flex items-center gap-2">
+            <ShieldCheck size={12} className="text-emerald-500" />
+            <span className="text-[8px] font-black text-sher-muted uppercase">Risk: Secure</span>
+         </div>
+         <span className="text-[8px] font-black text-sher-accent uppercase animate-pulse">Neural Tape Active</span>
+      </div>
+    </div>
+  );
+};
+
+export default OrderflowTerminal;

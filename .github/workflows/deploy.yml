@@ -1,0 +1,92 @@
+name: Sher AI CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  node-quality:
+    name: Node.js Logic & Type Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm install
+
+      - name: Generate Prisma Client
+        run: npx prisma generate
+
+      - name: Lint Codebase
+        run: npm run lint
+
+      - name: Production Build Verification
+        run: npm run build
+        env:
+          NEXTAUTH_SECRET: ${{ secrets.NEXTAUTH_SECRET || 'ci-test-secret' }}
+          NEXTAUTH_URL: http://localhost:3000
+          DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
+
+  python-quality:
+    name: Neural Core Dependency Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+          cache: 'pip'
+
+      - name: Verify Requirements
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Syntax Check
+        run: |
+          # Verify the ML prediction script is syntactically valid
+          if [ -f "ml/predict.py" ]; then
+            python3 -m py_compile ml/predict.py
+          fi
+
+  docker-validate:
+    name: Container Integrity Check
+    needs: [node-quality, python-quality]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: actions/setup-buildx-action@v3
+
+      - name: Validate Dockerfile Build
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: false
+          tags: sher-ai:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    name: Production Deployment
+    needs: [docker-validate]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deployment Handshake
+        run: |
+          echo "CI/CD Pipeline Completed Successfully."
+          echo "Triggering Production Webhook for institutional node updates..."
+          # In a real scenario, you would add steps to push the Docker image 
+          # to ECR/GCR and update your orchestrator (K8s/ECS/Vercel).

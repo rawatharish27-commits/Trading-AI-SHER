@@ -1,0 +1,33 @@
+
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: sher-distributed-core
+  labels:
+    cloud.googleapis.com/location: asia-south1
+spec:
+  template:
+    spec:
+      containers:
+      - image: gcr.io/sher-quant/neural-core:v4.2.0-stable
+        resources:
+          limits:
+            memory: 16Gi
+            cpu: 8000m
+        env:
+        - name: NODE_ENV
+          value: production
+        - name: EVENT_BUS_URL
+          value: redis://memorystore-sher:6379
+        - name: DATABASE_URL
+          value: ${DATABASE_URL}
+        - name: API_KEY
+          value: ${API_KEY}
+        ports:
+        - containerPort: 8080
+    metadata:
+      annotations:
+        autoscaling.knative.dev/maxScale: "100"
+        autoscaling.knative.dev/minScale: "2"
+        run.googleapis.com/cpu-throttling: "false"
+        run.googleapis.com/execution-environment: gen2

@@ -1,0 +1,22 @@
+{
+  "name": "Sher AI - Institutional Quant Terminal",
+  "short_name": "Sher AI",
+  "description": "Professional-grade AI trading dashboard featuring institutional risk guardrails, real-time neural market simulation, and Gemini-driven alpha filtering.",
+  "requestFramePermissions": [
+    "geolocation"
+  ],
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/1150/1150592.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/1150/1150592.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ],
+  "theme_color": "#0B0F14",
+  "background_color": "#0B0F14"
+}

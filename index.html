@@ -1,0 +1,157 @@
+
+<!DOCTYPE html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>SHER.AI | Institutional AI Trading Intelligence & Execution</title>
+    <meta name="description" content="SHER.AI is an institutional-grade AI trading platform featuring real-time neural market simulation, probability-based signals, and automated risk guardrails." />
+    
+    <link rel="manifest" href="manifest.json" />
+    <meta name="theme-color" content="#0B0F14" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+    <script>
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            colors: {
+              // Institutional Core Palette
+              bg: {
+                light: "#F7F8FA",
+                dark: "#0E1117",
+              },
+              surface: {
+                light: "#FFFFFF",
+                dark: "#161B22",
+              },
+              text: {
+                primary: "#111827",
+                secondary: "#6B7280",
+                dark: "#E5E7EB",
+              },
+              // Risk-Semantic Palette
+              risk: {
+                pass: "#2F855A", // Muted Green (Audit OK)
+                warn: "#B7791F", // Institutional Amber
+                block: "#9B2C2C", // Deep Red (Risk Halt)
+                info: "#2B6CB0", // Bank Blue
+              },
+              border: {
+                light: "#E5E7EB",
+                dark: "#2A2F3A",
+              },
+              sher: {
+                dark: '#0E1117',
+                card: '#161B22',
+                accent: '#2B6CB0',
+                success: '#2F855A',
+                danger: '#9B2C2C',
+                warning: '#B7791F',
+                muted: '#6B7280',
+              }
+            },
+            borderRadius: {
+              'inst': '2px', // Institutional sharpness protocol
+            },
+            animation: {
+              'fade-up': 'fadeUp 0.8s ease-out forwards',
+              'spin-slow': 'spin 3s linear infinite',
+            },
+            keyframes: {
+              fadeUp: {
+                '0%': { opacity: '0', transform: 'translateY(10px)' },
+                '100%': { opacity: '1', transform: 'translateY(0)' },
+              }
+            }
+          }
+        }
+      }
+    </script>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;900&family=JetBrains+Mono:wght@500&display=swap');
+
+      body {
+        background-color: #0E1117;
+        color: #E5E7EB;
+        font-family: 'Inter', -apple-system, sans-serif;
+        -webkit-font-smoothing: antialiased;
+        user-select: none;
+      }
+
+      /* Base UI Classes */
+      .card {
+        @apply bg-surface-light dark:bg-surface-dark 
+               border border-border-light dark:border-border-dark 
+               rounded-inst p-6 transition-all shadow-xl;
+      }
+
+      .section-title {
+        @apply text-[10px] font-black uppercase tracking-[0.3em] 
+               text-text-secondary mb-6 flex items-center gap-2;
+      }
+
+      .metric-value {
+        @apply text-3xl font-black text-white tabular-nums tracking-tighter;
+      }
+
+      .metric-label {
+        @apply text-[9px] font-bold text-text-secondary uppercase tracking-widest;
+      }
+
+      ::-webkit-scrollbar { width: 4px; height: 4px; }
+      ::-webkit-scrollbar-track { background: #0E1117; }
+      ::-webkit-scrollbar-thumb { background: #2A2F3A; }
+      ::-webkit-scrollbar-thumb:hover { background: #2B6CB0; }
+      
+      body, html { overscroll-behavior-y: contain; }
+      
+      /* Recharts Customization for Institutional Look */
+      .recharts-cartesian-grid-horizontal line,
+      .recharts-cartesian-grid-vertical line {
+        stroke: #ffffff05;
+      }
+      .recharts-default-tooltip {
+        @apply !bg-[#0B0F14] !border-border-dark !rounded-inst !shadow-2xl !p-3 !text-[10px] !font-bold !uppercase !tracking-widest;
+      }
+    </style>
+  <script type="importmap">
+{
+  "imports": {
+    "react": "https://aistudiocdn.com/react@^19.2.1",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.1/",
+    "react/": "https://aistudiocdn.com/react@^19.2.1/",
+    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.31.0",
+    "lucide-react": "https://aistudiocdn.com/lucide-react@^0.556.0",
+    "recharts": "https://aistudiocdn.com/recharts@^3.5.1",
+    "axios": "https://esm.sh/axios@^1.13.2",
+    "lightweight-charts": "https://esm.sh/lightweight-charts@4.1.3",
+    "crypto-js": "https://esm.sh/crypto-js@^4.2.0",
+    "bcryptjs": "https://esm.sh/bcryptjs@^3.0.3",
+    "crypto": "https://esm.sh/crypto@^1.0.1",
+    "next/": "https://esm.sh/next@^16.1.0/",
+    "path": "https://esm.sh/path@^0.12.7",
+    "next-auth": "https://esm.sh/next-auth@^4.24.13",
+    "child_process": "https://esm.sh/child_process@^1.0.2",
+    "stripe": "https://esm.sh/stripe@^20.1.0",
+    "otplib": "https://esm.sh/otplib@^12.0.1",
+    "util": "https://esm.sh/util@^0.12.5",
+    "razorpay": "https://esm.sh/razorpay@^2.9.6",
+    "ws": "https://esm.sh/ws@^8.18.3",
+    "socket.io-client": "https://esm.sh/socket.io-client@^4.8.1",
+    "react-native": "https://esm.sh/react-native@^0.83.1",
+    "lucide-react-native": "https://esm.sh/lucide-react-native@^0.562.0",
+    "zod": "https://esm.sh/zod@^4.2.1",
+    "@/": "./",
+    "@prisma/client": "https://esm.sh/@prisma/client@^7.2.0"
+  }
+}
+</script>
+<link rel="stylesheet" href="/index.css">
+</head>
+  <body>
+    <div id="root"></div>
+  <script type="module" src="/index.tsx"></script>
+</body>
+</html>
