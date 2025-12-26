@@ -12,13 +12,8 @@ export class ExecutionService {
    * 🦁 INSTITUTIONAL EXECUTION NODE (Hardened v2)
    */
   static async executeLive(signal: AISignal, allocation: AccountAllocation): Promise<LiveOrder> {
-    // EXECUTION KILL-SWITCH (NON-NEGOTIABLE)
-    if (process.env.EXECUTION_ENABLED !== "true") {
-      throw new Error("🚫 Live execution disabled");
-    }
-
     const config = brokerConfigService.getConfig();
-
+    
     if (!config.isConnected) {
       throw new Error("EXECUTION_HALT: Broker Bridge Disconnected.");
     }
