@@ -1,1 +1,176 @@
-���Ȭʋ�>���
+// This is your Prisma schema file
+// for SHER.AI Trading Platform v4.5
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// User Management
+model User {
+  id                  String   @id @default(cuid())
+  email               String   @unique
+  userId              String   @unique
+  name                String?
+  password            String?
+  role                String   @default("TRADER") // TRADER, VIEWER, ADMIN, TENANT_OWNER
+  plan                String   @default("FREE") // FREE, PRO, ELITE, INSTITUTIONAL
+  tenantId            String?
+  mobile              String?
+  city                String?
+  district            String?
+  state               String?
+  pin                 String?
+  onboardingCompleted Boolean  @default(false)
+  expiryDate          DateTime?
+  mfaSecret           String?
+  apiToken            String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  trades              Trade[]
+  signals             Signal[]
+  portfolios          Portfolio[]
+  orders              Order[]
+  brokerConfig        BrokerConfig?
+  riskMetrics         RiskMetric[]
+  strategies          UserStrategy[]
+}
+
+// Broker Configuration
+model BrokerConfig {
+  id                  String   @id @default(cuid())
+  brokerName          String   @default("ANGEL_ONE")
+  apiKey              String?
+  clientId            String?
+  password            String?
+  totpSecret          String?
+  isConnected         Boolean  @default(false)
+  feedToken           String?
+  jwtToken            String?
+  tokenExpiry         DateTime?
+  userId              String   @unique
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  user                User     @relation(fields: [userId], references: [id])
+}
+
+// Trading Signals
+model Signal {
+  id              String   @id @default(cuid())
+  symbol          String
+  action          String   // BUY, SELL, HOLD
+  probability     Float
+  confidence      Float?
+  reasoning       String
+  strategy        String
+  targets         String   // JSON: {entry, sl, t1, t2}
+  decisionState   String   @default("DISPATCH_READY")
+  userId          String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user            User     @relation(fields: [userId], references: [id])
+}
+
+// Portfolio Holdings
+model Portfolio {
+  id              String   @id @default(cuid())
+  symbol          String
+  quantity        Int
+  avgPrice        Float
+  currentPrice    Float
+  pnl             Float    @default(0)
+  pnlPercent      Float    @default(0)
+  unrealized      Float    @default(0)
+  exchange        String?
+  isin            String?
+  product         String?  // DELIVERY, INTRADAY, MARGIN
+  sector          String?
+  userId          String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user            User     @relation(fields: [userId], references: [id])
+}
+
+// Orders
+model Order {
+  id              String   @id @default(cuid())
+  orderId         String   @unique
+  symbol          String
+  side            String   // BUY, SELL
+  quantity        Int
+  price           Float
+  avgPrice        Float?
+  filledQuantity  Int      @default(0)
+  status          String   // PENDING, EXECUTED, REJECTED, CANCELLED
+  orderType       String   // MARKET, LIMIT, STOPLOSS
+  productType     String?  // DELIVERY, INTRADAY
+  userId          String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user            User     @relation(fields: [userId], references: [id])
+}
+
+// Trade History
+model Trade {
+  id              String   @id @default(cuid())
+  symbol          String
+  side            String   // BUY, SELL
+  quantity        Int
+  entryPrice      Float
+  exitPrice       Float?
+  pnl             Float?
+  strategy        String
+  entryTime       DateTime
+  exitTime        DateTime?
+  status          String   @default("OPEN") // OPEN, CLOSED
+  userId          String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user            User     @relation(fields: [userId], references: [id])
+}
+
+// Risk Metrics
+model RiskMetric {
+  id                  String   @id @default(cuid())
+  totalCapital         Float
+  availableCapital     Float
+  usedMargin          Float?
+  maxDrawdown         Float?
+  dailyPnL            Float?
+  realizedPnL          Float?
+  unrealizedPnL        Float?
+  riskScore           Float?
+  killSwitchActive     Boolean  @default(false)
+  userId              String
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  user                User     @relation(fields: [userId], references: [id])
+}
+
+// User Strategy Settings
+model UserStrategy {
+  id              String   @id @default(cuid())
+  strategyName    String
+  isActive        Boolean  @default(true)
+  weight          Float    @default(1.0)
+  winRate         Float?
+  netPnL          Float?
+  decayScore      Float?
+  lastUpdated     DateTime?
+  userId          String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user            User     @relation(fields: [userId], references: [id])
+}

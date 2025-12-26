@@ -6,11 +6,36 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
+dev.log
 
+# Dependencies
 node_modules
+.pnp
+.pnp.js
+
+# Testing
+coverage
+
+# Next.js
+.next/
+out/
+build
 dist
-dist-ssr
+
+# Production
 *.local
+
+# Environment variables - DO NOT COMMIT
+.env
+.env.local
+.env.*.local
+
+# Database files
+prisma/dev.db
+prisma/*.db
+prisma/*.db-journal
+*.db
+*.sqlite
 
 # Editor directories and files
 .vscode/*

@@ -1,43 +1,41 @@
+# Google Cloud Build Configuration for SHER.AI
+# Automated CI/CD pipeline for Cloud Run deployment
 
 steps:
-  # 1. Build Production Container
+  # Step 1: Build Docker image
   - name: 'gcr.io/cloud-builders/docker'
-    args: [
-      'build', 
-      '-t', '$_REGION-docker.pkg.dev/$PROJECT_ID/$_REPO_NAME/$_IMAGE_NAME:$COMMIT_SHA',
-      '.'
-    ]
+    args: ['build', '-t', 'gcr.io/$PROJECT_ID/sher-ai:$COMMIT_SHA', '-t', 'gcr.io/$PROJECT_ID/sher-ai:latest', '.']
 
-  # 2. Push to Artifact Registry
+  # Step 2: Push Docker image to Container Registry
   - name: 'gcr.io/cloud-builders/docker'
-    args: [
-      'push', 
-      '$_REGION-docker.pkg.dev/$PROJECT_ID/$_REPO_NAME/$_IMAGE_NAME:$COMMIT_SHA'
-    ]
+    args: ['push', 'gcr.io/$PROJECT_ID/sher-ai:$COMMIT_SHA']
+  
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'gcr.io/$PROJECT_ID/sher-ai:latest']
 
-  # 3. Deploy to Cloud Run
-  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
-    entrypoint: gcloud
+  # Step 3: Deploy to Cloud Run
+  - name: 'gcr.io/cloud-builders/gcloud'
     args:
       - 'run'
       - 'deploy'
-      - '$_IMAGE_NAME'
+      - 'sher-ai-trading'
       - '--image'
-      - '$_REGION-docker.pkg.dev/$PROJECT_ID/$_REPO_NAME/$_IMAGE_NAME:$COMMIT_SHA'
+      - 'gcr.io/$PROJECT_ID/sher-ai:$COMMIT_SHA'
       - '--region'
-      - '$_REGION'
+      - 'asia-south1'
       - '--platform'
       - 'managed'
-      - '--add-cloudsql-instances'
-      - '$PROJECT_ID:$_REGION:sher-db'
+      - '--allow-unauthenticated'
+      - '--port'
+      - '8080'
+      - '--memory'
+      - '2Gi'
+      - '--cpu'
+      - '2'
+      - '--timeout'
+      - '300s'
 
+# Image definitions
 images:
-  - '$_REGION-docker.pkg.dev/$PROJECT_ID/$_REPO_NAME/$_IMAGE_NAME:$COMMIT_SHA'
-
-substitutions:
-  _REGION: asia-south1
-  _REPO_NAME: sher-repo
-  _IMAGE_NAME: sher-api
-
-options:
-  logging: CLOUD_LOGGING_ONLY
+  - 'gcr.io/$PROJECT_ID/sher-ai:$COMMIT_SHA'
+  - 'gcr.io/$PROJECT_ID/sher-ai:latest'

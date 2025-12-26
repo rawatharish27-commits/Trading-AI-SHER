@@ -1,33 +1,73 @@
-
+# Cloud Run Service Configuration for SHER.AI Trading Platform
 apiVersion: serving.knative.dev/v1
 kind: Service
 metadata:
-  name: sher-distributed-core
-  labels:
-    cloud.googleapis.com/location: asia-south1
+  name: sher-ai-trading
+  annotations:
+    run.googleapis.com/ingress: all
+    run.googleapis.com/execution-environment: gen2
 spec:
   template:
-    spec:
-      containers:
-      - image: gcr.io/sher-quant/neural-core:v4.2.0-stable
-        resources:
-          limits:
-            memory: 16Gi
-            cpu: 8000m
-        env:
-        - name: NODE_ENV
-          value: production
-        - name: EVENT_BUS_URL
-          value: redis://memorystore-sher:6379
-        - name: DATABASE_URL
-          value: ${DATABASE_URL}
-        - name: API_KEY
-          value: ${API_KEY}
-        ports:
-        - containerPort: 8080
     metadata:
       annotations:
-        autoscaling.knative.dev/maxScale: "100"
-        autoscaling.knative.dev/minScale: "2"
         run.googleapis.com/cpu-throttling: "false"
-        run.googleapis.com/execution-environment: gen2
+        run.googleapis.com/autoscaling-scale-to-zero: "true"
+        autoscaling.knative.dev/maxScale: "10"
+        autoscaling.knative.dev/minScale: "0"
+    spec:
+      containerConcurrency: 80
+      timeoutSeconds: 300
+      containers:
+      - name: sher-ai
+        image: gcr.io/PROJECT_ID/sher-ai:latest
+        ports:
+        - containerPort: 8080
+        resources:
+          limits:
+            cpu: 2000m
+            memory: 2Gi
+        env:
+        # Node Configuration
+        - name: NODE_ENV
+          value: "production"
+        - name: PORT
+          value: "8080"
+        # Market Configuration
+        - name: MARKET_MODE
+          value: "PAPER"
+        # AI API (Google Gemini)
+        - name: API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: api-key-secret
+              key: API_KEY
+        # Angel One Broker Credentials
+        - name: ANGEL_ONE_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: broker-credentials
+              key: API_KEY
+        - name: ANGEL_ONE_CLIENT_ID
+          valueFrom:
+            secretKeyRef:
+              name: broker-credentials
+              key: CLIENT_ID
+        - name: ANGEL_ONE_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: broker-credentials
+              key: PASSWORD
+        - name: ANGEL_ONE_TOTP_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: broker-credentials
+              key: TOTP_SECRET
+        # Database
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: database-url
+              key: CONNECTION_STRING
+        # Optional: Cloud SQL
+        - name: CLOUDSQL_CONNECTION
+          value: "PROJECT:REGION:INSTANCE"
