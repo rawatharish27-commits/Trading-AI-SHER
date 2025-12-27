@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "../../../../../lib/auth";
+import { getServerSession } from "next-auth/react";
+import { authOptions } from "@/lib/auth";
 import Stripe from "stripe";
-import { PLANS_CONFIG } from "../../../../../lib/plans";
-import { Plan } from "../../../../../types";
+import { PLANS_CONFIG } from "@/lib/plans";
+import { Plan } from "@/types/global";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "");
 

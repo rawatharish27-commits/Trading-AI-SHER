@@ -1,0 +1,163 @@
+version: '3.8'
+
+services:
+  # ===========================================
+  # TRADING AI SHER APPLICATION
+  # ===========================================
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.prod
+    container_name: trading-ai-sher
+    restart: unless-stopped
+    ports:
+      - "3000:8080"
+    environment:
+      # Server Environment
+      - NODE_ENV=production
+      - PORT=8080
+
+      # Database
+      - DATABASE_URL=file:./data/dev.db
+
+      # AI Service
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+
+      # Broker
+      - ANGEL_ONE_API_KEY=${ANGEL_ONE_API_KEY:-}
+      - ANGEL_ONE_CLIENT_ID=${ANGEL_ONE_CLIENT_ID:-}
+      - ANGEL_ONE_PASSWORD=${ANGEL_ONE_PASSWORD:-}
+      - ANGEL_ONE_TOTP_SECRET=${ANGEL_ONE_TOTP_SECRET:-}
+
+      # Market Mode
+      - NEXT_PUBLIC_MARKET_MODE=${MARKET_MODE:-PAPER}
+
+      # Auth
+      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET:-super-secret-key-change-in-production-min-32-chars}
+      - NEXTAUTH_URL=http://localhost:3000
+
+      # Rate Limiting
+      - NEXT_PUBLIC_AI_RATE_LIMIT=5
+      - NEXT_PUBLIC_AI_CACHE_TTL=5
+
+      # Stripe
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY:-}
+      - STRIPE_PUBLISHABLE_KEY=${STRIPE_PUBLISHABLE_KEY:-}
+      - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET:-}
+
+      # Redis (Rate Limiting)
+      - REDIS_URL=redis://redis:6379
+
+      # JWT
+      - JWT_SECRET=${JWT_SECRET:-your-jwt-secret-change-in-production}
+
+      # Google OAuth
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
+
+      # Logging
+      - LOG_LEVEL=info
+      - LOG_FORMAT=json
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./db:/app/db
+    depends_on:
+      - redis
+      - postgres
+    networks:
+      - trading-ai-sher-network
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:8080/api/health', (r) => { process.exit(r.statusCode === 200 ? 0 : 1) })"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # ===========================================
+  # REDIS (Rate Limiting)
+  # ===========================================
+  redis:
+    image: redis:7-alpine
+    container_name: trading-ai-sher-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - trading-ai-sher-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    command: redis-server --appendonly yes --save 60 1 --loglevel warning
+
+  # ===========================================
+  # POSTGRESQL (Trade Store)
+  # ===========================================
+  postgres:
+    image: postgres:15-alpine
+    container_name: trading-ai-sher-postgres
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=sher_user
+      - POSTGRES_PASSWORD=sher_password_change_in_production
+      - POSTGRES_DB=sher_db
+      - POSTGRES_HOST_AUTH_METHOD=trust
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./init-db:/docker-entrypoint-initdb.d
+    networks:
+      - trading-ai-sher-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sher_user"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ===========================================
+  # ML TRAINING SERVICE (Optional)
+  # ===========================================
+  ml-training:
+    build:
+      context: ./ml-training
+      dockerfile: Dockerfile
+    container_name: trading-ai-sher-ml-training
+    restart: no
+    environment:
+      - TRAINING_INTERVAL=weekly
+      - MODEL_TYPE=xgboost
+    networks:
+      - trading-ai-sher-network
+    command: bash retrain.sh
+
+  # ===========================================
+  # PGADMIN (Database Management)
+  # ===========================================
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: trading-ai-sher-pgadmin
+    restart: unless-stopped
+    ports:
+      - "5050:80"
+    environment:
+      - PGADMIN_DEFAULT_EMAIL=admin@sher.ai
+      - PGADMIN_DEFAULT_PASSWORD=admin_sher_password
+      - PGADMIN_CONFIG_SERVER_MODE=False
+      - PGADMIN_CONFIG_SERVERS=Primary;Server=postgres;Port=5432;Username=sher_user;Password=sher_password_change_in_production;Database=sher_db
+    depends_on:
+      - postgres
+    networks:
+      - trading-ai-sher-network
+
+volumes:
+  redis-data:
+  postgres-data:
+
+networks:
+  trading-ai-sher-network:
+    driver: bridge

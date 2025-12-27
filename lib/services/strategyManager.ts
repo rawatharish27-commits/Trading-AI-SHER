@@ -1,165 +1,235 @@
+// Strategy Manager Service
+// Manages active trading strategies and performance
 
-import { Trade, StrategyStatus } from '../../types';
-import { eventBus } from '../engine/eventBus';
-import { DecayMonitor } from '../engine/governance/DecayMonitor';
+import { getTradeHistory, getWinLossRatio } from './tradeJournal';
+import { StrategyFeatures, AISignal } from '@/types/global';
 
-export interface PerformanceStats {
-  wins: number;
-  losses: number;
-  netPnL: number;
+export interface Strategy {
+  name: string;
+  type: string;
+  weight: number;
+  performance: {
+    totalTrades: number;
+    winRate: number;
+    avgPnl: number;
+    performanceScore: number; // 0-100
+  };
+  isActive: boolean;
 }
 
-/**
- * 🦁 STRATEGY MANAGER (Learner Node)
- * Responsible for the "Memory" of the AI.
- * Adjusts technical weights based on real-world execution alpha.
- */
-class StrategyManager {
-  private stats: Map<string, PerformanceStats> = new Map();
-  
-  // Weights for individual features (used by ProbabilityEngineV3)
-  private featureWeights: Record<string, number> = {
-    TREND: 0.30,
-    VOLUME: 0.25,
-    ORDERFLOW: 0.25,
-    STRUCTURE: 0.20
+// Default strategy weights
+const DEFAULT_STRATEGIES: Record<string, Strategy> = {
+  'SMA_CROSS_RSI': {
+    name: 'SMA Cross RSI',
+    type: 'TREND_FOLLOWING',
+    weight: 1.0,
+    performance: {
+      totalTrades: 0,
+      winRate: 65,
+      avgPnl: 0,
+      performanceScore: 50
+    },
+    isActive: true
+  },
+  'EMA_PULLBACK': {
+    name: 'EMA Pullback',
+    type: 'MEAN_REVERSION',
+    weight: 1.0,
+    performance: {
+      totalTrades: 0,
+      winRate: 68,
+      avgPnl: 0,
+      performanceScore: 55
+    },
+    isActive: true
+  },
+  'RANGE_BREAKOUT': {
+    name: 'Range Breakout',
+    type: 'VOLATILITY',
+    weight: 1.0,
+    performance: {
+      totalTrades: 0,
+      winRate: 70,
+      avgPnl: 0,
+      performanceScore: 60
+    },
+    isActive: true
+  },
+  'LIQUIDITY_SWEEP': {
+    name: 'Liquidity Sweep Reversal',
+    type: 'SMART_MONEY',
+    weight: 1.0,
+    performance: {
+      totalTrades: 0,
+      winRate: 75,
+      avgPnl: 0,
+      performanceScore: 70
+    },
+    isActive: true
+  }
+};
+
+let strategies = { ...DEFAULT_STRATEGIES };
+
+// Load strategies from storage (simulated)
+export async function loadStrategies(): Promise<void> {
+  try {
+    const stored = localStorage.getItem('sher_strategies');
+    if (stored) {
+      strategies = JSON.parse(stored);
+    }
+  } catch (error) {
+    console.error('Failed to load strategies:', error);
+    strategies = { ...DEFAULT_STRATEGIES };
+  }
+}
+
+// Save strategies to storage
+export async function saveStrategies(): Promise<void> {
+  try {
+    localStorage.setItem('sher_strategies', JSON.stringify(strategies));
+  } catch (error) {
+    console.error('Failed to save strategies:', error);
+  }
+}
+
+// Get all strategies
+export function getStrategies(): Record<string, Strategy> {
+  return strategies;
+}
+
+// Get active strategies
+export function getActiveStrategies(): Strategy[] {
+  return Object.values(strategies).filter(s => s.isActive);
+}
+
+// Get strategy by name
+export function getStrategy(name: string): Strategy | undefined {
+  return strategies[name];
+}
+
+// Update strategy weight
+export function updateStrategyWeight(name: string, weight: number): void {
+  if (strategies[name]) {
+    strategies[name].weight = Math.max(0, Math.min(5, weight));
+    saveStrategies();
+  }
+}
+
+// Update strategy performance
+export async function updateStrategyPerformance(name: string): Promise<void> {
+  const strategy = strategies[name];
+  if (!strategy) return;
+
+  const trades = await getTradeHistory(100);
+  const strategyTrades = trades.filter(t => t.strategy === name);
+
+  if (strategyTrades.length > 0) {
+    const winLoss = await getWinLossRatio(name);
+    const wins = winLoss.wins;
+    const losses = winLoss.losses;
+    const total = winLoss.total;
+
+    const winRate = (wins / total) * 100;
+    const avgPnl = trades.reduce((sum, t) => sum + (t.pnl || 0), 0) / total;
+
+    // Calculate performance score (0-100)
+    // Weighted combination of win rate (60%), avg PnL (30%), trade count (10%)
+    const performanceScore =
+      (winRate * 0.6) +
+      (avgPnl > 0 ? Math.min(100, avgPnl * 10) : 0) * 0.3 +
+      (Math.min(100, total) / 10) * 0.1;
+
+    strategies[name].performance = {
+      totalTrades: total,
+      winRate,
+      avgPnl,
+      performanceScore: Math.round(performanceScore)
+    };
+  }
+
+  // Adjust weight based on performance
+  if (winRate > 60 && avgPnl > 0) {
+    strategies[name].weight = Math.min(5, strategy.weight + 0.5);
+  } else if (winRate < 50 || avgPnl < 0) {
+    strategies[name].weight = Math.max(0.5, strategy.weight - 0.5);
+  }
+
+  await saveStrategies();
+}
+
+// Activate/deactivate strategy
+export function toggleStrategy(name: string, isActive: boolean): void {
+  if (strategies[name]) {
+    strategies[name].isActive = isActive;
+    saveStrategies();
+  }
+}
+
+// Calculate ensemble probability from active strategies
+export function calculateEnsembleProbability(
+  signals: AISignal[]
+): { probability: number; confidence: string; evidenceCount: number } {
+  const activeStrategies = getActiveStrategies();
+  let totalWeight = 0;
+  let weightedProbability = 0;
+
+  for (const signal of signals) {
+    const strategy = strategies[signal.strategy];
+    if (strategy && strategy.isActive) {
+      totalWeight += strategy.weight;
+      weightedProbability += signal.probability * strategy.weight;
+    }
+  }
+
+  if (totalWeight === 0) return {
+    probability: 0,
+    confidence: 'LOW',
+    evidenceCount: 0
   };
 
-  // Weights for specific strategies (used by CapitalAllocator)
-  private strategyWeights: Map<string, number> = new Map([
-    ['EMA Pullback', 1.0],
-    ['VWAP Trend Ride', 1.0],
-    ['Squeeze Breakout', 1.0],
-    ['Liquidity Sweep', 1.0],
-    ['SMA Cross + RSI', 1.0],
-    ['Sher Sovereign Ensemble', 1.0]
-  ]);
+  const ensembleProbability = weightedProbability / totalWeight;
+  const confidence = ensembleProbability > 70 ? 'HIGH' : ensembleProbability > 50 ? 'MEDIUM' : 'LOW';
+  const evidenceCount = signals.length;
 
-  constructor() {
-    this.loadWeights();
-  }
-
-  private loadWeights() {
-    if (typeof window === 'undefined') return;
-    const savedFeatures = localStorage.getItem('sher_neural_weights_v4');
-    if (savedFeatures) {
-      this.featureWeights = JSON.parse(savedFeatures);
-    }
-    const savedStrats = localStorage.getItem('sher_strategy_weights_v1');
-    if (savedStrats) {
-      try {
-        const parsed = JSON.parse(savedStrats);
-        Object.entries(parsed).forEach(([k, v]) => this.strategyWeights.set(k, v as number));
-      } catch (e) {
-        console.error("Failed to load strategy weights", e);
-      }
-    }
-  }
-
-  private saveWeights() {
-    if (typeof window === 'undefined') return;
-    localStorage.setItem('sher_neural_weights_v4', JSON.stringify(this.featureWeights));
-    
-    const stratObj: Record<string, number> = {};
-    this.strategyWeights.forEach((v, k) => {
-      stratObj[k] = v;
-    });
-    localStorage.setItem('sher_strategy_weights_v1', JSON.stringify(stratObj));
-  }
-
-  getWeights() {
-    return this.featureWeights;
-  }
-
-  getWeight(name: string): number {
-    return this.strategyWeights.get(name) || 1.0;
-  }
-
-  getWinRate(name: string): number {
-    const perf = this.stats.get(name);
-    if (!perf) return 50;
-    const total = perf.wins + perf.losses;
-    return total > 0 ? (perf.wins / total) * 100 : 50;
-  }
-
-  calibrate(trades: Trade[]) {
-    const closed = trades.filter(t => t.status === 'CLOSED');
-    if (closed.length === 0) return;
-
-    const lastTrade = closed[closed.length - 1];
-    const isWin = (lastTrade.pnl || 0) > 0;
-    
-    const lr = 0.01;
-
-    if (isWin) {
-      this.featureWeights.TREND = Math.min(0.5, this.featureWeights.TREND + lr);
-      this.featureWeights.ORDERFLOW = Math.min(0.5, this.featureWeights.ORDERFLOW + lr);
-    } else {
-      this.featureWeights.TREND = Math.max(0.1, this.featureWeights.TREND - lr * 1.5);
-      this.featureWeights.VOLUME = Math.max(0.1, this.featureWeights.VOLUME - lr);
-    }
-
-    const total = this.featureWeights.TREND + this.featureWeights.VOLUME + this.featureWeights.ORDERFLOW + this.featureWeights.STRUCTURE;
-    this.featureWeights.TREND /= total;
-    this.featureWeights.VOLUME /= total;
-    this.featureWeights.ORDERFLOW /= total;
-    this.featureWeights.STRUCTURE /= total;
-
-    this.saveWeights();
-    
-    eventBus.emit('audit.log', { 
-      msg: "Neural Weights Calibrated", 
-      weights: this.featureWeights 
-    }, 'STRATEGY_MANAGER');
-  }
-
-  recordTradeOutcome(strategyName: string, pnl: number) {
-    const prev = this.stats.get(strategyName) || { wins: 0, losses: 0, netPnL: 0 };
-    
-    const outcome = {
-      wins: prev.wins + (pnl > 0 ? 1 : 0),
-      losses: prev.losses + (pnl <= 0 ? 1 : 0),
-      netPnL: prev.netPnL + pnl
-    };
-
-    this.stats.set(strategyName, outcome);
-    this.adjustStrategyWeight(strategyName, outcome);
-    
-    this.saveWeights();
-  }
-
-  private adjustStrategyWeight(name: string, stats: PerformanceStats) {
-    const total = stats.wins + stats.losses;
-    if (total < 5) return; 
-
-    const winRate = stats.wins / total;
-    const newWeight = Math.min(Math.max(winRate * 2, 0.5), 2.0);
-    this.strategyWeights.set(name, newWeight);
-  }
-
-  evaluatePerformance(trades: Trade[]): StrategyStatus[] {
-    const names = Array.from(this.strategyWeights.keys());
-    return names.map(name => {
-      const perf = this.stats.get(name) || { wins: 0, losses: 0, netPnL: 0 };
-      const total = perf.wins + perf.losses;
-      const winRate = total > 0 ? (perf.wins / total) * 100 : 64;
-
-      // 🕵️ DECAY AUDIT
-      const decayAudit = DecayMonitor.evaluate(name, trades);
-
-      return {
-        name,
-        winRate,
-        netPnL: perf.netPnL,
-        expectancy: winRate > 50 ? 0.45 : -0.15,
-        profitFactor: winRate > 50 ? 1.85 : 0.75,
-        status: decayAudit.status,
-        weight: this.strategyWeights.get(name) || 1.0,
-        reason: decayAudit.reason,
-        decayScore: decayAudit.score
-      };
-    });
-  }
+  return {
+    probability: Math.round(ensembleProbability),
+    confidence,
+    evidenceCount
+  };
 }
 
-export const strategyManager = new StrategyManager();
+// Get strategy performance summary
+export function getStrategyPerformanceSummary(): {
+  totalStrategies: number;
+  activeStrategies: number;
+  bestStrategy: Strategy | null;
+  worstStrategy: Strategy | null;
+  avgWinRate: number;
+} {
+  const allStrategies = Object.values(strategies);
+  const active = getActiveStrategies();
+
+  if (allStrategies.length === 0) {
+    return {
+      totalStrategies: 0,
+      activeStrategies: 0,
+      bestStrategy: null,
+      worstStrategy: null,
+      avgWinRate: 0
+    };
+  }
+
+  // Sort by performance score
+  const sorted = [...allStrategies].sort((a, b) => b.performance.performanceScore - a.performance.performanceScore);
+
+  const totalWinRate = allStrategies.reduce((sum, s) => sum + s.performance.winRate, 0) / allStrategies.length;
+
+  return {
+    totalStrategies: allStrategies.length,
+    activeStrategies: active.length,
+    bestStrategy: sorted[0] || null,
+    worstStrategy: sorted[sorted.length - 1] || null,
+    avgWinRate: Math.round(totalWinRate)
+  };
+}

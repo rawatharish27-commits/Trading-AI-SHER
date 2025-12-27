@@ -1,50 +1,83 @@
 import { Plan } from '../types';
 
-/**
- * 🏛️ SOVEREIGN PLAN REGISTRY
- * Denominated in INR.
- */
-export const PLANS_CONFIG = {
-  [Plan.FREE]: { 
-    amount: 0, 
-    currency: 'INR',
-    name: 'Alpha Access',
-    durationDays: 0,
-    limits: { signalsPerDay: 0 },
-    gatewayIds: { razorpay: '', stripe: '' }
-  },
-  [Plan.PRO]: { 
-    amount: 1999, 
-    currency: 'INR',
-    name: 'Prop Trader',
-    durationDays: 30,
-    limits: { signalsPerDay: 5 },
-    gatewayIds: { razorpay: 'plan_pro_123', stripe: 'price_pro_123' }
-  },
-  [Plan.ELITE]: { 
-    amount: 4999, 
-    currency: 'INR',
-    name: 'Master Node',
-    durationDays: 30,
-    limits: { signalsPerDay: 999 },
-    gatewayIds: { razorpay: 'plan_elite_123', stripe: 'price_elite_123' }
-  },
-  [Plan.INSTITUTIONAL]: {
-    amount: 25000,
-    currency: 'INR',
-    name: 'Institutional Node',
-    durationDays: 365,
-    limits: { signalsPerDay: 9999 },
-    gatewayIds: { razorpay: 'plan_inst_123', stripe: 'price_inst_123' }
-  }
-} as const;
+export interface PlanConfig {
+  name: string;
+  description: string;
+  price: number;
+  currency: string;
+  interval: 'month' | 'year';
+  features: string[];
+  aiLimit: number;
+  gatewayIds: {
+    stripe?: string;
+    razorpay?: string;
+  };
+}
 
-/**
- * Fix: Added SIGNAL_LIMITS export to resolve "Module '"../plans"' has no exported member 'SIGNAL_LIMITS'" error in usageTracker.ts
- */
-export const SIGNAL_LIMITS: Record<string, number> = {
-  [Plan.FREE]: 0,
-  [Plan.PRO]: 5,
-  [Plan.ELITE]: 999,
-  [Plan.INSTITUTIONAL]: 9999
+export const PLANS_CONFIG: Record<Plan, PlanConfig> = {
+  FREE: {
+    name: 'Free Tier',
+    description: 'Basic features for casual traders',
+    price: 0,
+    currency: 'INR',
+    interval: 'month' as const,
+    features: [
+      '10 AI calls/day',
+      'Rule-based fallback',
+      'Basic probability',
+      'No audit trail'
+    ],
+    aiLimit: 10,
+    gatewayIds: {}
+  },
+  PRO: {
+    name: 'Pro Tier',
+    description: 'Professional features for serious traders',
+    price: 299,
+    currency: 'INR',
+    interval: 'month' as const,
+    features: [
+      '200 AI calls/day',
+      'Investor-grade probability',
+      'Evidence & Explainability',
+      'Trade logging',
+      'Monthly billing'
+    ],
+    aiLimit: 200,
+    gatewayIds: {
+      stripe: 'price_1OABC',
+      razorpay: 'plan_1OXYZ'
+    }
+  },
+  INSTITUTIONAL: {
+    name: 'Institutional Tier',
+    description: 'Enterprise features for institutional clients',
+    price: 2499,
+    currency: 'INR',
+    interval: 'month' as const,
+    features: [
+      '1000 AI calls/day',
+      'ML-assisted calibration',
+      'Full audit trail',
+      'White-label branding',
+      'Dedicated support'
+    ],
+    aiLimit: 1000,
+    gatewayIds: {
+      stripe: 'price_1OABC',
+      razorpay: 'plan_1OXYZ'
+    }
+  }
 };
+
+export function getPlanConfig(plan: Plan): PlanConfig | undefined {
+  return PLANS_CONFIG[plan];
+}
+
+export function getPlanLimits(plan: Plan): { aiLimit: number } {
+  const config = PLANS_CONFIG[plan];
+  if (!config) {
+    return { aiLimit: 10 }; // Default to FREE
+  }
+  return { aiLimit: config.aiLimit };
+}

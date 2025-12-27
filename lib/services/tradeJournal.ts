@@ -1,31 +1,77 @@
+// Trade Journal Service
+// Records all trades for audit trail and ML training
 
-import { Trade } from '../../types';
+import { prisma } from './client';
 
-class TradeJournal {
-  private trades: Trade[] = [];
-
-  constructor() {
-    // Initial mock data for demonstration
-    this.trades = [
-       { id: 't1', symbol: 'RELIANCE', side: 'BUY', quantity: 10, entryPrice: 2450.00, exitPrice: 2480.00, pnl: 300.00, strategy: 'Momentum', entryTime: new Date(Date.now() - 3600000).toISOString(), exitTime: new Date(Date.now() - 1800000).toISOString(), status: 'CLOSED' },
-       { id: 't2', symbol: 'TCS', side: 'SELL', quantity: 5, entryPrice: 3950.00, exitPrice: 3890.00, pnl: 300.00, strategy: 'Mean Reversion', entryTime: new Date(Date.now() - 7200000).toISOString(), exitTime: new Date(Date.now() - 3600000).toISOString(), status: 'CLOSED' }
-    ];
-  }
-
-  addTrade(trade: Trade) {
-    this.trades.push(trade);
-  }
-
-  updateTrade(id: string, updates: Partial<Trade>) {
-    const index = this.trades.findIndex(t => t.id === id);
-    if (index !== -1) {
-      this.trades[index] = { ...this.trades[index], ...updates };
-    }
-  }
-
-  getTrades() {
-    return this.trades;
-  }
+export interface TradeJournalEntry {
+  signalId: string;
+  symbol: string;
+  action: string;
+  probability: number;
+  confidence: string;
+  strategy: string;
+  entryPrice: number;
+  targetPrice: number;
+  stopLoss: number;
+  outcome?: 'WIN' | 'LOSS' | 'PENDING';
+  pnl?: number;
+  duration?: number;
+  marketRegime: string;
+  evidence: string[];
+  timestamp: string;
 }
 
-export const tradeJournal = new TradeJournal();
+export async function recordTrade(entry: TradeJournalEntry) {
+  return prisma.tradeSignal.create({
+    data: {
+      id: entry.signalId,
+      tenantId: 'default', // TODO: Use actual tenant ID
+      symbol: entry.symbol,
+      probability: entry.probability,
+      confidence: entry.confidence,
+      evidence: JSON.stringify({
+        evidence: entry.evidence,
+        strategy: entry.strategy,
+        marketRegime: entry.marketRegime
+      }),
+      outcome: entry.outcome
+    }
+  });
+}
+
+export async function updateTradeOutcome(signalId: string, outcome: 'WIN' | 'LOSS', pnl: number) {
+  return prisma.tradeSignal.update({
+    where: { id: signalId },
+    data: {
+      outcome,
+      pnl
+    }
+  });
+}
+
+export async function getTradeHistory(limit: number = 100) {
+  return prisma.tradeSignal.findMany({
+    take: limit,
+    orderBy: { createdAt: 'desc' }
+  });
+}
+
+export async function getWinLossRatio(symbol?: string) {
+  const trades = await prisma.tradeSignal.findMany({
+    where: symbol ? { symbol } : undefined,
+    where: {
+      outcome: { in: ['WIN', 'LOSS'] }
+    }
+  });
+
+  const wins = trades.filter(t => t.outcome === 'WIN').length;
+  const losses = trades.filter(t => t.outcome === 'LOSS').length;
+  const total = wins + losses;
+
+  return {
+    wins,
+    losses,
+    total,
+    winRate: total > 0 ? (wins / total) * 100 : 0
+  };
+}

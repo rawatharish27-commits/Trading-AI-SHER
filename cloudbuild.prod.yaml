@@ -1,0 +1,117 @@
+# GCP Cloud Build Configuration
+# Trading AI SHER - Production Build Pipeline
+
+steps:
+  # ===========================================
+  # STEP 1: BUILD DOCKER IMAGE
+  # ===========================================
+  - name: 'Build Trading AI SHER Image'
+    id: 'build'
+    args:
+      - 'build'
+      - '-t'
+      - 'gcr.io/$PROJECT_ID/trading-ai-sher:$SHORT_SHA'
+      - '-t'
+      - 'gcr.io/$PROJECT_ID/trading-ai-sher:latest'
+      - '.'
+    waitFor: ['-']
+
+  # ===========================================
+  # STEP 2: PUSH TO GCR
+  # ===========================================
+  - name: 'Push Docker Image to GCR'
+    id: 'push'
+    args:
+      - 'push'
+      - 'gcr.io/$PROJECT_ID/trading-ai-sher:$SHORT_SHA'
+    waitFor: ['build']
+
+  - name: 'Push Latest Tag'
+    args:
+      - 'push'
+      - 'gcr.io/$PROJECT_ID/trading-ai-sher:latest'
+    waitFor: ['push']
+
+  # ===========================================
+  # STEP 3: TAG PRODUCTION IMAGE
+  # ===========================================
+  - name: 'Tag Production Image'
+    id: 'tag-prod'
+    args:
+      - 'tag'
+      - 'gcr.io/$PROJECT_ID/trading-ai-sher:$SHORT_SHA'
+      - 'gcr.io/$PROJECT_ID/trading-ai-sher:v450'
+    waitFor: ['push']
+
+  # ===========================================
+  # STEP 4: DEPLOY TO CLOUD RUN
+  # ===========================================
+  - name: 'Deploy to Cloud Run'
+    id: 'deploy'
+    args:
+      - 'run'
+      - 'deploy'
+      - 'trading-ai-sher'
+      - '--image=gcr.io/$PROJECT_ID/trading-ai-sher:$SHORT_SHA'
+      - '--region=us-central1'
+      - '--platform=managed'
+      - '--quiet'
+    env:
+      - 'CLOUDSDK_ACCOUNT_CREDENTIALS=${_JSON_KEY}'
+    waitFor: ['tag-prod']
+
+  # ===========================================
+  # STEP 5: SET TRAFFIC TO 100%
+  # ===========================================
+  - name: 'Set Production Traffic'
+    id: 'traffic'
+    args:
+      - 'run'
+      - 'services'
+      - 'update-traffic'
+      - 'trading-ai-sher'
+      - '--to-latest'
+      - '--region=us-central1'
+      - '--platform=managed'
+      - '--quiet'
+    waitFor: ['deploy']
+
+  # ===========================================
+  # STEP 6: VERIFY DEPLOYMENT
+  # ===========================================
+  - name: 'Verify Deployment'
+    id: 'verify'
+    args:
+      - 'run'
+      - 'services'
+      - 'describe'
+      - 'trading-ai-sher'
+      - '--region=us-central1'
+      - '--platform=managed'
+      - '--format=json'
+    waitFor: ['traffic']
+
+  # ===========================================
+  # STEP 7: DEPLOYMENT NOTIFICATION
+  # ===========================================
+  - name: 'Send Deployment Notification'
+    id: 'notify'
+    args:
+      - 'functions'
+      - 'call'
+      - 'deployment-notification'
+      - '--data={"service":"trading-ai-sher","version":"'$SHORT_SHA'","status":"success","timestamp":"'$(date +%s)'"}'
+    waitFor: ['verify']
+
+timeout: '1800s'
+
+# ===========================================
+# LOGGING CONFIGURATION
+# ===========================================
+logsBucket: 'trading-ai-sher-build-logs'
+
+# ===========================================
+# SUBSTITUTION VARIABLES
+# ===========================================
+substitutions:
+  _JSON_KEY: '' # Set in trigger
