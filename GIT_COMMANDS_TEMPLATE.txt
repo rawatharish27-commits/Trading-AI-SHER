@@ -1,0 +1,29 @@
+# 🔒 SECURE GIT COMMANDS
+
+## ⚠️ **NEVER INCLUDE TOKENS IN THIS FILE**
+
+## 🎯 **QUICK START**
+
+### **Step 1: Add Remote (Insert YOUR_TOKEN)**
+```bash
+git remote add origin https://YOUR_TOKEN@github.com/rawatharish27-commits/Trading-AI-SHER.git
+```
+
+### **Step 2: Add Files**
+```bash
+git add .
+```
+
+### **Step 3: Commit**
+```bash
+git commit -m "feat: Implement Trading AI SHER v4.5 in workspace"
+```
+
+### **Step 4: Push**
+```bash
+git push -u origin main
+```
+
+---
+
+**REMEMBER: Replace YOUR_TOKEN with your actual token manually!** 🔒
