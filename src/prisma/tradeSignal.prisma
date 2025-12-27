@@ -1,0 +1,11 @@
+model TradeSignal {
+  id            String   @id @default(uuid())
+  tenantId      String
+  symbol        String
+  probability   Int
+  confidence    String
+  evidence      Json
+  outcome       String?
+  pnl           Float?
+  createdAt     DateTime @default(now())
+}
