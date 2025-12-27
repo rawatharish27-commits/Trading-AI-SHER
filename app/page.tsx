@@ -1,9 +1,10 @@
 
 'use client';
-import dynamic from 'next/dynamic';
 
-// Dynamically import the main App component to prevent SSR issues with browser-only features
-const MainApp = dynamic(() => import('../App'), { 
+import dynamicImport from 'next/dynamic';
+
+// Dynamically import the main App component to prevent SSR issues
+const MainApp = dynamicImport(() => import('../App'), {
   ssr: false,
   loading: () => (
     <div className="h-screen w-screen bg-[#0B0F14] flex items-center justify-center">
@@ -11,6 +12,10 @@ const MainApp = dynamic(() => import('../App'), {
     </div>
   )
 });
+
+// Force dynamic rendering
+export const dynamic = 'force-dynamic';
+export const fetchCache = 'force-no-store';
 
 export default function Page() {
   return <MainApp />;
