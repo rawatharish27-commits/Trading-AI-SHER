@@ -1,17 +1,17 @@
 
 import { NextRequest, NextResponse } from "next/server";
-import { tradeJournal } from "../../../../lib/services/tradeJournal";
-import { equityService } from "../../../../lib/services/equityService";
-import { reportService } from "../../../../lib/services/reportService";
+import { getTradeHistory } from "@/lib/services/tradeJournal";
+import { equityService } from "@/lib/services/equityService";
+import { reportService } from "@/lib/services/reportService";
 
 export async function GET() {
-  const trades = tradeJournal.getTrades();
+  const trades = await getTradeHistory();
   const equity = equityService.snapshot();
-  
+
   // Generating a small history for the demo
   const history = [];
   const now = new Date();
-  
+
   for (let i = 0; i < 7; i++) {
     const d = new Date(now);
     d.setDate(d.getDate() - i);

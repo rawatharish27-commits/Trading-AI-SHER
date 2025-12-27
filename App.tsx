@@ -89,8 +89,8 @@ const App: React.FC = () => {
     });
   }, [watchlistSymbols, livePrices]);
 
-  const pitchMetrics = useMemo(() => PitchAnalytics.calculate(tradeJournal.getTrades(), 250000), []);
-  const sampleCert = useMemo(() => CertificationEngine.runAudit('EMA-PB-V4', tradeJournal.getTrades()), []);
+  const pitchMetrics = useMemo(() => PitchAnalytics.calculate([], 250000), []);
+  const sampleCert = useMemo(() => CertificationEngine.runAudit('EMA-PB-V4', []), []);
 
   useEffect(() => { applyTheme(THEMES[activeTheme]); }, [activeTheme]);
 

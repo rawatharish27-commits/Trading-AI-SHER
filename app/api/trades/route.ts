@@ -1,7 +1,8 @@
 
 import { NextRequest, NextResponse } from "next/server";
-import { tradeJournal } from "../../../lib/services/tradeJournal";
+import { getTradeHistory } from "@/lib/services/tradeJournal";
 
 export async function GET(req: NextRequest) {
-  return NextResponse.json(tradeJournal.getTrades());
+  const trades = await getTradeHistory();
+  return NextResponse.json(trades);
 }

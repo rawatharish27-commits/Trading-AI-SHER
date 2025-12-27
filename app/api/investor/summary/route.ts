@@ -1,18 +1,18 @@
 
 import { NextRequest, NextResponse } from "next/server";
-import { tradeJournal } from "../../../../lib/services/tradeJournal";
-import { calculateAnalytics } from "../../../../lib/services/tradeAnalytics";
-import { equityService } from "../../../../lib/services/equityService";
+import { getTradeHistory } from "@/lib/services/tradeJournal";
+import { calculateAnalytics } from "@/lib/services/tradeAnalytics";
+import { equityService } from "@/lib/services/equityService";
 
 /**
  * GET: Consolidates all investor-facing metrics into a single high-performance payload.
  */
 export async function GET(req: NextRequest) {
   try {
-    const trades = tradeJournal.getTrades();
+    const trades = await getTradeHistory();
     const analytics = calculateAnalytics(trades);
     const equitySnapshot = equityService.snapshot();
-    
+
     // Most recent trades for transparency log
     const recentTrades = trades
       .slice(-10)
