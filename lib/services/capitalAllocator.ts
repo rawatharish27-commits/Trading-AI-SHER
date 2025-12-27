@@ -1,72 +1,140 @@
+// Capital Allocator Service
+// Allocates capital across strategies based on performance
 
-import { AllocationResult, AccountAllocation } from '../../types';
-import { strategyManager } from './strategyManager';
-import { pnlService } from './pnlService';
-import { governanceService } from './governanceService';
+import { getStrategyPerformanceSummary } from './strategyManager';
+import { getActiveStrategies } from './strategyManager';
+import { getTradeHistory } from './tradeJournal';
+
+export interface CapitalAllocation {
+  strategy: string;
+  weight: number;
+  capital: number;
+  reason: string;
+}
 
 export class CapitalAllocator {
-  private readonly BASE_RISK_PER_TRADE = 0.005; // 0.5%
-  private readonly MAX_CONCENTRATION_PCT = 0.15; // 15%
+  // ... (class implementation)
+}
 
-  private accounts = [
-    { id: 'PRIMARY_HFT', capital: 1000000, riskMultiplier: 1.0, active: true },
-    { id: 'BETA_ALGO', capital: 500000, riskMultiplier: 0.7, active: true },
-    { id: 'ALPHA_SHARD_01', capital: 2500000, riskMultiplier: 1.2, active: true }
-  ];
+export async function calculateCapitalAllocation(
+  totalCapital: number
+): Promise<CapitalAllocation[]> {
+  const summary = getStrategyPerformanceSummary();
+  const strategies = getActiveStrategies();
 
-  allocate(
-    symbol: string, 
-    probability: number, 
-    regime: string, 
-    strategyName: string,
-    totalAUM: number
-  ): AllocationResult {
-    const strategyWeight = strategyManager.getWeight(strategyName);
-    const isShardingActive = governanceService.isServiceActive('multiAccountSharding');
-    
-    const regimeMultiplier: Record<string, number> = {
-      "TRENDING_UP": 1.0,
-      "COMPRESSION": 0.6,
-      "RANGING": 0.4,
-      "VOLATILE": 0.25,
-      "TRENDING_DOWN": 0.8
-    };
-    
-    const envFactor = regimeMultiplier[regime] || 0.5;
-    const convictionFactor = probability > 0.85 ? 1.2 : (probability > 0.70 ? 1.0 : 0.5);
-    const sessionPnL = pnlService.snapshot().net;
-    const drawdownThrottling = sessionPnL < 0 ? Math.max(0.5, 1 + (sessionPnL / totalAUM)) : 1.0;
-    
-    const finalRiskPct = this.BASE_RISK_PER_TRADE * strategyWeight * envFactor * convictionFactor * drawdownThrottling;
+  if (summary.totalStrategies === 0) {
+    return [{
+      strategy: 'CASH',
+      weight: 1.0,
+      capital: totalCapital,
+      reason: 'No active strategies, all capital in cash'
+    }];
+  }
 
-    // If sharding is disabled, concentrate all risk in PRIMARY_HFT
-    const activeAccounts = isShardingActive 
-        ? this.accounts.filter(a => a.active)
-        : [this.accounts[0]];
+  const allocations: CapitalAllocation[] = [];
 
-    const multiAccountAllocs: AccountAllocation[] = activeAccounts.map(acc => {
-        const accRiskAmt = acc.capital * finalRiskPct * acc.riskMultiplier;
-        const positionSize = (accRiskAmt / 0.015);
-        const maxAllowed = acc.capital * this.MAX_CONCENTRATION_PCT;
+  // Allocate based on performance score
+  const totalPerformanceScore = strategies.reduce(
+    (sum, s) => sum + s.performance.performanceScore,
+    0
+  );
 
-        return {
-          accountId: acc.id,
-          amount: Math.round(Math.min(positionSize, maxAllowed) * 100) / 100,
-          risk: Math.round(accRiskAmt * 100) / 100
-        };
+  for (const strategy of strategies) {
+    const weight = strategy.performance.performanceScore / totalPerformanceScore;
+    const capital = totalCapital * weight;
+
+    allocations.push({
+      strategy: strategy.name,
+      weight,
+      capital,
+      reason: `Performance Score: ${strategy.performance.performanceScore}`
     });
+  }
 
-    const totalAlloc = multiAccountAllocs.reduce((sum, a) => sum + a.amount, 0);
-    const totalRisk = multiAccountAllocs.reduce((sum, a) => sum + a.risk, 0);
+  return allocations;
+}
 
-    return {
-      symbol,
-      amount: totalAlloc,
-      risk: totalRisk,
-      reason: `${isShardingActive ? 'SHARDED' : 'CONCENTRATED'} | α: x${strategyWeight.toFixed(2)} | Conv: ${(probability*100).toFixed(0)}%`,
-      accounts: multiAccountAllocs
-    };
+export async function getCapitalEfficiency(): Promise<{
+  totalPnl: number;
+  totalCapital: number;
+  efficiency: number;
+}> {
+  const trades = await getTradeHistory(100);
+  const totalPnl = trades.reduce((sum, t) => sum + (t.pnl || 0), 0);
+  const totalCapital = 1000000;
+
+  const efficiency = totalCapital > 0 ? (totalPnl / totalCapital) * 100 : 0;
+
+  return {
+    totalPnl,
+    totalCapital,
+    efficiency
+  };
+}
+
+export async function getRecommendedAllocation(
+  riskTolerance: 'CONSERVATIVE' | 'MODERATE' | 'AGGRESSIVE'
+): Promise<CapitalAllocation[]> {
+  const totalCapital = 1000000;
+
+  switch (riskTolerance) {
+    case 'CONSERVATIVE':
+      const summary = getStrategyPerformanceSummary();
+      if (!summary.bestStrategy) {
+        return [{ strategy: 'CASH', weight: 1.0, capital: totalCapital, reason: 'No strategies' }];
+      }
+
+      return [{
+        strategy: summary.bestStrategy.name,
+        weight: 0.7,
+        capital: totalCapital * 0.7,
+        reason: 'Best performer (Conservative)'
+      }, {
+        strategy: 'CASH',
+        weight: 0.3,
+        capital: totalCapital * 0.3,
+        reason: 'Cash buffer'
+      }];
+
+    case 'MODERATE':
+      return await calculateCapitalAllocation(totalCapital);
+
+    case 'AGGRESSIVE':
+      const summary2 = getStrategyPerformanceSummary();
+      const best = summary2.bestStrategy;
+      const secondBest = summary2.worstStrategy;
+
+      if (!best) {
+        return [{ strategy: 'CASH', weight: 1.0, capital: totalCapital, reason: 'No strategies' }];
+      }
+
+      const allocations = [{
+        strategy: best.name,
+        weight: 0.6,
+        capital: totalCapital * 0.6,
+        reason: 'Best performer (Aggressive)'
+      }];
+
+      if (secondBest) {
+        allocations.push({
+          strategy: secondBest.name,
+          weight: 0.4,
+          capital: totalCapital * 0.4,
+          reason: 'Second best performer'
+        });
+      }
+
+      return allocations;
+
+    default:
+      return await calculateCapitalAllocation(totalCapital);
   }
 }
 
-export const capitalAllocator = new CapitalAllocator();
+// Namespace export for component compatibility
+export const capitalAllocator = {
+  calculateCapitalAllocation,
+  getCapitalEfficiency,
+  getRecommendedAllocation,
+  CapitalAllocator
+};

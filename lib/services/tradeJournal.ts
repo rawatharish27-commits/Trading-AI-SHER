@@ -1,7 +1,7 @@
 // Trade Journal Service
 // Records all trades for audit trail and ML training
 
-import { prisma } from './client';
+import { prisma } from '@/lib/prisma/client';
 
 export interface TradeJournalEntry {
   signalId: string;
@@ -75,3 +75,11 @@ export async function getWinLossRatio(symbol?: string) {
     winRate: total > 0 ? (wins / total) * 100 : 0
   };
 }
+
+// Namespace export for component compatibility
+export const tradeJournal = {
+  recordTrade,
+  updateTradeOutcome,
+  getTradeHistory,
+  getWinLossRatio
+};

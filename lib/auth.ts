@@ -4,14 +4,22 @@
  */
 
 import type { NextAuthConfig } from "next-auth";
-import { GoogleProvider } from "next-auth/providers/google";
 
 export const authOptions: NextAuthConfig = {
   providers: [
-    GoogleProvider({
+    {
+      id: 'google',
+      name: 'Google',
+      type: 'oauth',
+      authorization: { params: { grant_type: 'authorization_code' } },
+      token: 'https://oauth2.googleapis.com/token',
+      userinfo: 'https://www.googleapis.com/oauth2/v3/userinfo',
+      profile(profile) {
+        return { id: profile.sub, name: profile.name, email: profile.email, image: profile.picture }
+      },
       clientId: process.env.GOOGLE_CLIENT_ID || "",
       clientSecret: process.env.GOOGLE_CLIENT_SECRET || "",
-    }),
+    }
   ],
   callbacks: {
     async jwt({ token, user, account }) {

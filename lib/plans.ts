@@ -1,4 +1,4 @@
-import { Plan } from '../types';
+import { Plan } from '../types/global';
 
 export interface PlanConfig {
   name: string;
@@ -81,3 +81,10 @@ export function getPlanLimits(plan: Plan): { aiLimit: number } {
   }
   return { aiLimit: config.aiLimit };
 }
+
+// Export for usage tracking
+export const SIGNAL_LIMITS: Record<Plan, number> = {
+  FREE: PLANS_CONFIG.FREE.aiLimit,
+  PRO: PLANS_CONFIG.PRO.aiLimit,
+  INSTITUTIONAL: PLANS_CONFIG.INSTITUTIONAL.aiLimit
+};

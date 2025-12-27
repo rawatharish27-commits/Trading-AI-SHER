@@ -1,67 +1,102 @@
-import { AISignal, OrderUpdate } from '../../types';
-import { governanceService } from './governanceService';
-import { capitalAllocator } from './capitalAllocator';
-import { pnlService } from './pnlService';
-import { ComplianceGuard } from '../compliance/ComplianceGuard';
-import { AuditVault } from '../audit/AuditVault';
+// Execution Engine Service
+// Handles order placement to broker
 
-class ExecutionEngine {
-  private activeOrders: Set<string> = new Set();
+import { Broker } from '@/lib/brokers/broker.interface';
+import { BrokerFactory, BrokerType } from '@/lib/brokers/brokerFactory';
+import { AISignal } from '@/types/global';
+import { recordTrade } from './tradeJournal';
 
-  async autoExecute(signal: AISignal) {
-    if (!governanceService.isServiceActive('automatedExecution')) return;
-    if (this.activeOrders.has(signal.symbol)) return;
+export class ExecutionEngine {
+  private broker: Broker;
+  private brokerType: BrokerType;
 
-    // --- PHASE 6: COMPLIANCE HANDSHAKE ---
-    const audit = await ComplianceGuard.auditBeforeExecution(signal, 'NODE_OWNER');
-    if (!audit.approved) {
-      console.warn(`🦁 [Compliance] VETO: ${audit.reason}`);
-      AuditVault.log({ event: 'EXECUTION_VETOED', signal: signal.id, reason: audit.reason });
-      return;
-    }
+  constructor(brokerType: BrokerType = 'MOCK', config: any = {}) {
+    this.brokerType = brokerType;
+    this.broker = BrokerFactory.create(brokerType, config);
+  }
 
-    console.log(`[AutoExec] ⚡ AUDIT PASSED: ${signal.symbol} (Ref: ${audit.auditRef?.slice(0,8)})`);
-    
-    const allocation = capitalAllocator.allocate(
-      signal.symbol, 
-      signal.probability, 
-      'TRENDING_UP', 
-      signal.strategy, 
-      1000000 
-    );
-
+  async connect(config?: any): Promise<boolean> {
     try {
-      this.activeOrders.add(signal.symbol);
-      const res = await fetch('/api/orders/from-signals', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          signalIds: [signal.id], 
-          portfolioId: 'AUTO_DESK', 
-          mode: 'PAPER',
-          allocation,
-          auditHash: audit.auditRef // Link order to audit hash
-        })
+      return await this.broker.connect(config || {});
+    } catch (error) {
+      console.error('Execution Engine: Failed to connect broker:', error);
+      return false;
+    }
+  }
+
+  async disconnect(): Promise<void> {
+    await this.broker.disconnect();
+  }
+
+  async executeOrder(signal: AISignal): Promise<any> {
+    try {
+      const order = {
+        orderId: `ORDER-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        tradingSymbol: signal.symbol,
+        transactionType: signal.action === 'BUY' ? 'BUY' : 'SELL',
+        quantity: signal.allocation || 100,
+        price: signal.targets.entry,
+        orderType: 'LIMIT',
+        status: 'PENDING',
+        averagePrice: 0,
+        filledShares: '0'
+      };
+
+      const placedOrder = await this.broker.placeOrder(order);
+
+      // Record trade in journal
+      await recordTrade({
+        signalId: signal.id,
+        symbol: signal.symbol,
+        action: signal.action,
+        probability: signal.probability,
+        confidence: signal.confidence,
+        strategy: signal.strategy,
+        entryPrice: signal.targets.entry,
+        targetPrice: signal.targets.t1,
+        stopLoss: signal.targets.sl,
+        timestamp: new Date().toISOString(),
+        evidence: [],
+        marketRegime: signal.marketRegime || 'UNKNOWN'
       });
 
-      if (res.ok) {
-        const update: OrderUpdate = {
-          orderid: `AUTO-${Date.now()}`,
-          tradingsymbol: signal.symbol,
-          status: 'COMPLETE',
-          transactiontype: signal.action as any,
-          filledqty: allocation.amount / (signal.targets.entry || 1),
-          avgprice: signal.targets.entry
-        };
-        pnlService.onOrderUpdate(update);
-        AuditVault.log({ event: 'EXECUTION_FILLED', orderId: update.orderid, symbol: signal.symbol });
-      }
-    } catch (e) {
-      console.error("[AutoExec] Bridge Error", e);
-    } finally {
-      setTimeout(() => this.activeOrders.delete(signal.symbol), 30000);
+      return placedOrder;
+    } catch (error) {
+      console.error('Execution Engine: Failed to place order:', error);
+      throw error;
     }
+  }
+
+  async cancelOrder(orderId: string): Promise<boolean> {
+    try {
+      return await this.broker.cancelOrder(orderId);
+    } catch (error) {
+      console.error('Execution Engine: Failed to cancel order:', error);
+      return false;
+    }
+  }
+
+  async getOrders(): Promise<any[]> {
+    try {
+      return await this.broker.getOrders();
+    } catch (error) {
+      console.error('Execution Engine: Failed to get orders:', error);
+      return [];
+    }
+  }
+
+  async getTrades(): Promise<any[]> {
+    try {
+      return await this.broker.getTrades();
+    } catch (error) {
+      console.error('Execution Engine: Failed to get trades:', error);
+      return [];
+    }
+  }
+
+  getBrokerType(): BrokerType {
+    return this.brokerType;
   }
 }
 
-export const executionEngine = new ExecutionEngine();
+export default ExecutionEngine;

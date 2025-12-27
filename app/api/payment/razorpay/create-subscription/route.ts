@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "../../../../../lib/auth";
-import Razorpay from "razorpay";
-import { PLANS_CONFIG } from "../../../../../lib/plans";
-import { Plan } from "../../../../../types";
+import { getServerSession } from "next-auth/react";
+import { authOptions } from "@/lib/auth";
+import Razorpay from "@/lib/razorpay";
+import { PLANS_CONFIG } from "@/lib/plans";
+import { Plan } from "@/types/global";
 
 const razorpay = new Razorpay({
-  key_id: process.env.RAZORPAY_KEY_ID || "",
-  key_secret: process.env.RAZORPAY_KEY_SECRET || "",
+  key_id: process.env.RAZORPAY_KEY_ID!,
+  key_secret: process.env.RAZORPAY_KEY_SECRET!,
 });
 
 export async function POST(req: NextRequest) {
@@ -25,17 +25,17 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Invalid Subscription Plan" }, { status: 400 });
     }
 
-    const subscription = await razorpay.subscriptions.create({
-      plan_id: planConfig.gatewayIds.razorpay,
-      customer_notify: 1,
-      total_count: 12, // 1 year of monthly billing
+    const order = await razorpay.orders.create({
+      amount: planConfig.price * 100, // Razorpay expects amount in paise
+      currency: planConfig.currency,
+      receipt: `receipt_${Date.now()}`,
       notes: {
         userId: (session.user as any).id,
         plan: plan,
-      }
+      },
     });
 
-    return NextResponse.json(subscription);
+    return NextResponse.json({ id: order.id });
   } catch (error: any) {
     console.error("Razorpay Subscription Error:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
