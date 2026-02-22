@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core import get_db
 from app.models import User, Order, OrderStatus, OrderSide, OrderType, ProductType
 from app.engines import risk_system, TradeRequest
+from app.api.v1.endpoints.auth import get_current_user
 
 router = APIRouter()
 
@@ -28,7 +29,7 @@ async def place_order(
     exchange: str = "NSE",
     stop_loss: Optional[float] = None,
     target: Optional[float] = None,
-    current_user: User = Depends(),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """
@@ -101,7 +102,7 @@ async def get_orders(
     page_size: int = Query(20, ge=1, le=100),
     symbol: Optional[str] = None,
     status: Optional[str] = None,
-    current_user: User = Depends(),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """Get user's orders with pagination"""
@@ -135,7 +136,7 @@ async def get_orders(
 @router.get("/{order_id}")
 async def get_order(
     order_id: int,
-    current_user: User = Depends(),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """Get a specific order by ID"""
@@ -159,7 +160,7 @@ async def get_order(
 @router.post("/{order_id}/cancel")
 async def cancel_order(
     order_id: int,
-    current_user: User = Depends(),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """Cancel a pending order"""
@@ -196,7 +197,7 @@ async def cancel_order(
 async def square_off_position(
     symbol: str,
     exchange: str = "NSE",
-    current_user: User = Depends(),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """Square off position for a symbol"""

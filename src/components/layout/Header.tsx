@@ -3,7 +3,7 @@
 import { Bell, Menu, Search, User, LogOut, Settings } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
-import { ThemeToggle } from "./ThemeProvider";
+import { ThemeToggle } from "@/providers/ThemeProvider";
 
 export function Header() {
   const [showUserMenu, setShowUserMenu] = useState(false);

@@ -3,18 +3,26 @@
 Run script for Trading AI SHER Backend
 """
 
-import uvicorn
 import os
 import sys
+from pathlib import Path
 
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+# Load .env file before importing anything else
+from dotenv import load_dotenv
+env_path = Path(__file__).parent / ".env"
+load_dotenv(env_path, override=True)
+
+# Now import settings
 from app.core.config import settings
 
 
 def main():
     """Run the FastAPI server"""
+    import uvicorn
+    
     uvicorn.run(
         "app.main:app",
         host=settings.host,

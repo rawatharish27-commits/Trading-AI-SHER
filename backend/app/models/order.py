@@ -113,7 +113,7 @@ class Order(Base):
 
     # Strategy & Metadata
     strategy: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    metadata: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON, nullable=True)
+    order_metadata: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON, nullable=True)
 
     # Timestamps
     order_time: Mapped[datetime] = mapped_column(

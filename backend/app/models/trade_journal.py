@@ -129,7 +129,7 @@ class TradeJournal(Base):
     chart_screenshot: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
 
     # Metadata
-    metadata: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON, nullable=True)
+    journal_metadata: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON, nullable=True)
 
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(

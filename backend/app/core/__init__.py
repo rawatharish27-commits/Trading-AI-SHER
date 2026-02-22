@@ -2,8 +2,13 @@
 Core module exports
 """
 
+# Import config first to ensure settings are loaded
 from app.core.config import Settings, get_settings, settings
-from app.core.database import Base, async_session_maker, engine, get_db, init_db
+
+# Then import database (which uses settings)
+from app.core.database import Base, async_session_maker, engine, get_db, init_db, close_db
+
+# Then import security
 from app.core.security import (
     create_access_token,
     create_refresh_token,
@@ -24,6 +29,7 @@ __all__ = [
     "async_session_maker",
     "get_db",
     "init_db",
+    "close_db",
     # Security
     "create_access_token",
     "create_refresh_token",

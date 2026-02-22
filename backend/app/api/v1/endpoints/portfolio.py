@@ -11,13 +11,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import get_db
 from app.models import User, Position, PositionStatus
+from app.api.v1.endpoints.auth import get_current_user
 
 router = APIRouter()
 
 
 @router.get("/summary")
 async def get_portfolio_summary(
-    current_user: User = Depends(),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """Get portfolio summary"""
@@ -62,7 +63,7 @@ async def get_portfolio_summary(
 @router.get("/positions")
 async def get_positions(
     status: Optional[str] = "OPEN",
-    current_user: User = Depends(),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """Get user's positions"""
@@ -87,7 +88,7 @@ async def get_positions(
 @router.get("/positions/{position_id}")
 async def get_position(
     position_id: int,
-    current_user: User = Depends(),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """Get a specific position"""
@@ -109,7 +110,7 @@ async def get_position(
 async def update_stop_loss(
     position_id: int,
     stop_loss: float,
-    current_user: User = Depends(),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """Update stop loss for a position"""
@@ -135,7 +136,7 @@ async def update_stop_loss(
 async def get_trade_history(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
-    current_user: User = Depends(),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """Get closed positions history"""

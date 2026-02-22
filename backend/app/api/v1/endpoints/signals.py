@@ -14,6 +14,7 @@ from app.core import get_db
 from app.models import User, Signal, SignalAction, SignalStatus
 from app.schemas import SignalCreate, SignalResponse, SignalListResponse
 from app.engines import probability_engine, strategy_ensemble, MarketRegime
+from app.api.v1.endpoints.auth import get_current_user
 
 router = APIRouter()
 
@@ -44,7 +45,7 @@ async def get_active_user_signals(
 async def generate_signal(
     symbol: str,
     exchange: str = "NSE",
-    current_user: User = Depends(),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """
@@ -153,7 +154,7 @@ async def get_signals(
     symbol: Optional[str] = None,
     action: Optional[str] = None,
     status: Optional[str] = None,
-    current_user: User = Depends(),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """Get user's signals with pagination and filtering"""
@@ -189,7 +190,7 @@ async def get_signals(
 @router.get("/{signal_id}", response_model=SignalResponse)
 async def get_signal(
     signal_id: int,
-    current_user: User = Depends(),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """Get a specific signal by ID"""
@@ -213,7 +214,7 @@ async def get_signal(
 @router.post("/{signal_id}/cancel")
 async def cancel_signal(
     signal_id: int,
-    current_user: User = Depends(),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """Cancel an active signal"""
