@@ -1,0 +1,241 @@
+# Trading AI SHER - Kubernetes Deployment
+# Production-ready configuration
+
+---
+# ==================== NAMESPACE ====================
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: trading-ai-sher
+  labels:
+    app: sher
+    environment: production
+
+---
+# ==================== CONFIGMAP ====================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: sher-config
+  namespace: trading-ai-sher
+data:
+  APP_NAME: "Trading AI SHER"
+  APP_VERSION: "4.5.0"
+  ENVIRONMENT: "production"
+  DEBUG: "false"
+  DATABASE_URL: "sqlite+aiosqlite:///./data/sher.db"
+  AUTO_TRADE_ENABLED: "true"
+  AUTO_TRADE_CONFIDENCE_THRESHOLD: "0.75"
+
+---
+# ==================== SECRETS ====================
+apiVersion: v1
+kind: Secret
+metadata:
+  name: sher-secrets
+  namespace: trading-ai-sher
+type: Opaque
+stringData:
+  SECRET_KEY: "your-secret-key-change-in-production"
+  TELEGRAM_BOT_TOKEN: ""
+  TELEGRAM_CHAT_ID: ""
+  EMAIL_SENDER: ""
+  EMAIL_PASSWORD: ""
+  ANGEL_ONE_API_KEY: ""
+  ANGEL_ONE_CLIENT_ID: ""
+  ANGEL_ONE_PASSWORD: ""
+
+---
+# ==================== PERSISTENT VOLUME ====================
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: sher-data-pvc
+  namespace: trading-ai-sher
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: standard
+
+---
+# ==================== BACKEND DEPLOYMENT ====================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sher-backend
+  namespace: trading-ai-sher
+  labels:
+    app: sher-backend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: sher-backend
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: sher-backend
+    spec:
+      containers:
+        - name: backend
+          image: sher-backend:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8000
+              name: http
+          envFrom:
+            - configMapRef:
+                name: sher-config
+            - secretRef:
+                name: sher-secrets
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "512Mi"
+            limits:
+              cpu: "2000m"
+              memory: "2Gi"
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          volumeMounts:
+            - name: data-volume
+              mountPath: /app/data
+            - name: logs-volume
+              mountPath: /app/logs
+      volumes:
+        - name: data-volume
+          persistentVolumeClaim:
+            claimName: sher-data-pvc
+        - name: logs-volume
+          emptyDir: {}
+
+---
+# ==================== BACKEND SERVICE ====================
+apiVersion: v1
+kind: Service
+metadata:
+  name: sher-backend-svc
+  namespace: trading-ai-sher
+spec:
+  selector:
+    app: sher-backend
+  ports:
+    - port: 8000
+      targetPort: 8000
+      name: http
+  type: ClusterIP
+
+---
+# ==================== SCHEDULER DEPLOYMENT ====================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sher-scheduler
+  namespace: trading-ai-sher
+  labels:
+    app: sher-scheduler
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: sher-scheduler
+  template:
+    metadata:
+      labels:
+        app: sher-scheduler
+    spec:
+      containers:
+        - name: scheduler
+          image: sher-backend:latest
+          imagePullPolicy: Always
+          command: ["python", "-m", "app.services.automated_scheduler"]
+          envFrom:
+            - configMapRef:
+                name: sher-config
+            - secretRef:
+                name: sher-secrets
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "256Mi"
+            limits:
+              cpu: "1000m"
+              memory: "1Gi"
+          volumeMounts:
+            - name: data-volume
+              mountPath: /app/data
+      volumes:
+        - name: data-volume
+          persistentVolumeClaim:
+            claimName: sher-data-pvc
+
+---
+# ==================== HPA ====================
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: sher-backend-hpa
+  namespace: trading-ai-sher
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: sher-backend
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+
+---
+# ==================== CRONJOB ====================
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: sher-data-update
+  namespace: trading-ai-sher
+spec:
+  schedule: "0 6 * * 1-5"
+  timezone: "Asia/Kolkata"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+            - name: data-update
+              image: sher-backend:latest
+              command: ["python", "-c", "from app.services.historical_data_service import historical_data_service; import asyncio; asyncio.run(historical_data_service.update_all_symbols())"]
+              volumeMounts:
+                - name: data-volume
+                  mountPath: /app/data
+          volumes:
+            - name: data-volume
+              persistentVolumeClaim:
+                claimName: sher-data-pvc
+          restartPolicy: OnFailure

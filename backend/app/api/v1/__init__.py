@@ -1,7 +1,7 @@
 """
-API v1
+API v1 Package
 """
 
-from app.api.v1 import endpoints
+from app.api.v1.endpoints import admin
 
-__all__ = ["endpoints"]
+__all__ = ["admin"]
