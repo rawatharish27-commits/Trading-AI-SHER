@@ -24,6 +24,7 @@ if TYPE_CHECKING:
     from app.models.signal import Signal
     from app.models.order import Order
     from app.models.position import Position
+    from app.models.swing_trade import SwingTrade
 
 import enum
 
@@ -101,6 +102,7 @@ class User(Base):
     signals: Mapped[List["Signal"]] = relationship("Signal", back_populates="user", lazy="selectin")
     orders: Mapped[List["Order"]] = relationship("Order", back_populates="user", lazy="selectin")
     positions: Mapped[List["Position"]] = relationship("Position", back_populates="user", lazy="selectin")
+    swing_trades: Mapped[List["SwingTrade"]] = relationship("SwingTrade", back_populates="user", lazy="selectin")
 
     def __repr__(self) -> str:
         return f"<User(id={self.id}, email='{self.email}', role={self.role})>"

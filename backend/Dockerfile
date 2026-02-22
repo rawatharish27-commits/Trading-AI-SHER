@@ -1,57 +1,56 @@
 # Trading AI SHER - Production Dockerfile
 # Multi-stage build for optimized image
 
-# ===== Builder Stage =====
-FROM python:3.11-slim as builder
+# ==================== BASE STAGE ====================
+FROM python:3.11-slim as base
 
-WORKDIR /app
+# Set environment variables
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONFAULTHANDLER=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
 
-# Install build dependencies
+# Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     curl \
+    git \
+    sqlite3 \
+    libsqlite3-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Create virtual environment
-RUN python -m venv /opt/venv
-ENV PATH="/opt/venv/bin:$PATH"
+# Create app user
+RUN groupadd -r appgroup && useradd -r -g appgroup appuser
 
-# Install Python dependencies
-COPY requirements.txt .
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
-
-
-# ===== Production Stage =====
-FROM python:3.11-slim as production
-
+# Set work directory
 WORKDIR /app
 
-# Install runtime dependencies only
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl \
-    && rm -rf /var/lib/apt/lists/*
+# ==================== BUILDER STAGE ====================
+FROM base as builder
 
-# Copy virtual environment from builder
-COPY --from=builder /opt/venv /opt/venv
-ENV PATH="/opt/venv/bin:$PATH"
+# Copy requirements
+COPY requirements.txt .
 
-# Create non-root user
-RUN useradd -m -u 1000 sher && \
-    mkdir -p /app/logs /app/models && \
-    chown -R sher:sher /app
+# Install Python dependencies
+RUN pip install --user -r requirements.txt
 
-# Copy application
-COPY --chown=sher:sher . .
+# ==================== PRODUCTION STAGE ====================
+FROM base as production
 
-# Switch to non-root user
-USER sher
+# Copy installed packages from builder
+COPY --from=builder /root/.local /root/.local
+ENV PATH=/root/.local/bin:$PATH
 
-# Environment variables
-ENV PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1 \
-    ENVIRONMENT=production \
-    LOG_LEVEL=info
+# Copy application code
+COPY --chown=appuser:appgroup . .
+
+# Create necessary directories
+RUN mkdir -p /app/logs /app/data /app/models \
+    && chown -R appuser:appgroup /app
+
+# Switch to app user
+USER appuser
 
 # Expose port
 EXPOSE 8000
@@ -61,4 +60,29 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:8000/health || exit 1
 
 # Run application
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4"]
+CMD ["python", "run.py"]
+
+# ==================== DEVELOPMENT STAGE ====================
+FROM base as development
+
+# Install development dependencies
+RUN pip install \
+    pytest \
+    pytest-asyncio \
+    pytest-cov \
+    black \
+    isort \
+    flake8 \
+    mypy
+
+# Copy application code
+COPY . .
+
+# Create directories
+RUN mkdir -p /app/logs /app/data /app/models
+
+# Expose port
+EXPOSE 8000
+
+# Run with hot reload
+CMD ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]

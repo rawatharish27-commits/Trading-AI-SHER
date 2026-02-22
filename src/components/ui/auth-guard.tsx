@@ -9,8 +9,8 @@ interface AuthGuardProps {
   fallback?: React.ReactNode;
 }
 
-// Routes that don't require authentication
-const publicRoutes = ["/login", "/register", "/forgot-password", "/reset-password"];
+// Routes that don't require authentication (single admin - no registration)
+const publicRoutes = ["/login", "/register"];
 
 export function AuthGuard({ children, fallback }: AuthGuardProps) {
   const router = useRouter();

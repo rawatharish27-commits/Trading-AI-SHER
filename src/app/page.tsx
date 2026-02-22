@@ -26,6 +26,7 @@ export default function DashboardPage() {
       fetchMarketStatus();
       fetchQuotes(watchlist);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated]);
 
   return (

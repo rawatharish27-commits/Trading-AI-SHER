@@ -1,40 +1,27 @@
-// Auth types
-export interface User {
-  id: string;
-  email: string;
-  name: string;
-  avatar?: string;
-  role: 'user' | 'admin' | 'trader';
-  createdAt: string;
-  updatedAt: string;
+// Auth Types - Simplified for Single Admin
+
+export interface AdminUser {
+  username: string;
+  role: string;
+  login_time: string;
+  session_expires: string;
 }
 
-export interface LoginCredentials {
-  email: string;
+export interface AdminLoginCredentials {
   password: string;
 }
 
-export interface RegisterCredentials {
-  email: string;
-  password: string;
-  name: string;
-  confirmPassword: string;
+export interface TokenResponse {
+  access_token: string;
+  token_type: string;
+  expires_in: number;
 }
 
-export interface AuthTokens {
-  accessToken: string;
-  refreshToken: string;
-  expiresIn: number;
+export interface PasswordChange {
+  current_password: string;
+  new_password: string;
 }
 
-export interface AuthResponse {
-  user: User;
-  tokens: AuthTokens;
-}
-
-export interface AuthState {
-  user: User | null;
-  isAuthenticated: boolean;
-  isLoading: boolean;
-  error: string | null;
-}
+// Legacy type aliases for backward compatibility
+export type User = AdminUser;
+export type LoginCredentials = AdminLoginCredentials;

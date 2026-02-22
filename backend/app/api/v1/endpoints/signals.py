@@ -5,47 +5,240 @@ AI signal generation and management
 
 from datetime import datetime
 from typing import Annotated, List, Optional
+import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import select, and_, desc
+from sqlalchemy import select, and_, desc, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import get_db
-from app.models import User, Signal, SignalAction, SignalStatus
-from app.schemas import SignalCreate, SignalResponse, SignalListResponse
+from app.models import Signal, SignalAction, SignalStatus
 from app.engines import probability_engine, strategy_ensemble, MarketRegime
-from app.api.v1.endpoints.auth import get_current_user
+from app.api.v1.endpoints.auth import get_admin_user
 
 router = APIRouter()
 
 
-# ==================== HELPER ====================
-
-async def get_active_user_signals(
-    db: AsyncSession,
-    user_id: int,
-    limit: int = 100
-) -> List[Signal]:
-    """Get active signals for a user"""
-    result = await db.execute(
-        select(Signal)
-        .where(and_(
-            Signal.user_id == user_id,
-            Signal.status == SignalStatus.ACTIVE
-        ))
-        .order_by(desc(Signal.created_at))
-        .limit(limit)
-    )
-    return result.scalars().all()
-
-
 # ==================== ENDPOINTS ====================
 
-@router.post("/generate", response_model=SignalResponse)
+@router.get("")
+async def get_signals(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    symbol: Optional[str] = None,
+    action: Optional[str] = None,
+    status: Optional[str] = None,
+    min_probability: Optional[float] = None,
+    max_probability: Optional[float] = None,
+    risk_level: Optional[str] = None,
+    strategy: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    admin: dict = Depends(get_admin_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Get signals with pagination and filtering"""
+    query = select(Signal)
+    
+    if symbol:
+        query = query.where(Signal.symbol == symbol)
+    if action:
+        query = query.where(Signal.action == action)
+    if status:
+        query = query.where(Signal.status == status)
+    if min_probability:
+        query = query.where(Signal.probability >= min_probability)
+    if max_probability:
+        query = query.where(Signal.probability <= max_probability)
+    if risk_level:
+        query = query.where(Signal.risk_level == risk_level)
+    if strategy:
+        query = query.where(Signal.strategy == strategy)
+    
+    # Count total
+    count_query = select(func.count(Signal.id))
+    total_result = await db.execute(count_query)
+    total = total_result.scalar() or 0
+    
+    # Paginate
+    query = query.order_by(desc(Signal.created_at))
+    query = query.offset((page - 1) * page_size).limit(page_size)
+    
+    result = await db.execute(query)
+    signals = result.scalars().all()
+    
+    return {
+        "signals": [
+            {
+                "id": s.id,
+                "user_id": s.user_id,
+                "trace_id": s.trace_id,
+                "symbol": s.symbol,
+                "exchange": s.exchange,
+                "action": s.action.value if s.action else "HOLD",
+                "direction": s.direction,
+                "status": s.status.value if s.status else "PENDING",
+                "probability": s.probability,
+                "confidence": s.confidence,
+                "confidence_level": s.confidence_level,
+                "risk_level": s.risk_level,
+                "risk_warning": s.risk_warning,
+                "entry_price": s.entry_price,
+                "stop_loss": s.stop_loss,
+                "target_1": s.target_1,
+                "target_2": s.target_2,
+                "target_3": s.target_3,
+                "market_regime": s.market_regime,
+                "strategy": s.strategy,
+                "evidence_count": s.evidence_count,
+                "reasoning": s.reasoning,
+                "quantity": s.quantity,
+                "allocated_capital": s.allocated_capital,
+                "signal_time": s.signal_time.isoformat() if s.signal_time else None,
+                "expiry_time": s.expiry_time.isoformat() if s.expiry_time else None,
+                "created_at": s.created_at.isoformat() if s.created_at else None,
+                "updated_at": s.updated_at.isoformat() if s.updated_at else None,
+            }
+            for s in signals
+        ],
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "has_next": (page * page_size) < total,
+    }
+
+
+@router.get("/active")
+async def get_active_signals(
+    admin: dict = Depends(get_admin_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Get all active signals"""
+    result = await db.execute(
+        select(Signal)
+        .where(Signal.status == SignalStatus.ACTIVE)
+        .order_by(desc(Signal.created_at))
+        .limit(50)
+    )
+    signals = result.scalars().all()
+    
+    return [
+        {
+            "id": s.id,
+            "user_id": s.user_id,
+            "trace_id": s.trace_id,
+            "symbol": s.symbol,
+            "exchange": s.exchange,
+            "action": s.action.value if s.action else "HOLD",
+            "direction": s.direction,
+            "status": s.status.value if s.status else "PENDING",
+            "probability": s.probability,
+            "confidence": s.confidence,
+            "confidence_level": s.confidence_level,
+            "risk_level": s.risk_level,
+            "risk_warning": s.risk_warning,
+            "entry_price": s.entry_price,
+            "stop_loss": s.stop_loss,
+            "target_1": s.target_1,
+            "target_2": s.target_2,
+            "target_3": s.target_3,
+            "market_regime": s.market_regime,
+            "strategy": s.strategy,
+            "evidence_count": s.evidence_count,
+            "reasoning": s.reasoning,
+            "quantity": s.quantity,
+            "allocated_capital": s.allocated_capital,
+            "signal_time": s.signal_time.isoformat() if s.signal_time else None,
+            "expiry_time": s.expiry_time.isoformat() if s.expiry_time else None,
+            "created_at": s.created_at.isoformat() if s.created_at else None,
+            "updated_at": s.updated_at.isoformat() if s.updated_at else None,
+        }
+        for s in signals
+    ]
+
+
+@router.get("/stats")
+async def get_signal_stats(
+    admin: dict = Depends(get_admin_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Get signal statistics"""
+    # Total signals
+    total_result = await db.execute(select(func.count(Signal.id)))
+    total = total_result.scalar() or 0
+    
+    # Active signals
+    active_result = await db.execute(
+        select(func.count(Signal.id)).where(Signal.status == SignalStatus.ACTIVE)
+    )
+    active = active_result.scalar() or 0
+    
+    # Hit target
+    hit_target_result = await db.execute(
+        select(func.count(Signal.id)).where(Signal.status == SignalStatus.HIT_TARGET)
+    )
+    hit_target = hit_target_result.scalar() or 0
+    
+    # Stopped out
+    stopped_out_result = await db.execute(
+        select(func.count(Signal.id)).where(Signal.status == SignalStatus.STOPPED_OUT)
+    )
+    stopped_out = stopped_out_result.scalar() or 0
+    
+    # Expired
+    expired_result = await db.execute(
+        select(func.count(Signal.id)).where(Signal.status == SignalStatus.EXPIRED)
+    )
+    expired = expired_result.scalar() or 0
+    
+    # Win rate
+    win_rate = (hit_target / (hit_target + stopped_out) * 100) if (hit_target + stopped_out) > 0 else 0
+    
+    # Average probability
+    avg_prob_result = await db.execute(
+        select(func.avg(Signal.probability))
+    )
+    avg_probability = avg_prob_result.scalar() or 0
+    
+    # Average confidence
+    avg_conf_result = await db.execute(
+        select(func.avg(Signal.confidence))
+    )
+    avg_confidence = avg_conf_result.scalar() or 0
+    
+    # By strategy
+    strategy_result = await db.execute(
+        select(Signal.strategy, func.count(Signal.id))
+        .group_by(Signal.strategy)
+    )
+    by_strategy = {row[0] or "unknown": row[1] for row in strategy_result.all()}
+    
+    # By symbol
+    symbol_result = await db.execute(
+        select(Signal.symbol, func.count(Signal.id))
+        .group_by(Signal.symbol)
+    )
+    by_symbol = {row[0]: row[1] for row in symbol_result.all()}
+    
+    return {
+        "total": total,
+        "active": active,
+        "hit_target": hit_target,
+        "stopped_out": stopped_out,
+        "expired": expired,
+        "win_rate": win_rate,
+        "avg_probability": avg_probability,
+        "avg_confidence": avg_confidence,
+        "by_strategy": by_strategy,
+        "by_symbol": by_symbol,
+    }
+
+
+@router.post("/generate")
 async def generate_signal(
     symbol: str,
     exchange: str = "NSE",
-    current_user: User = Depends(get_current_user),
+    admin: dict = Depends(get_admin_user),
     db: AsyncSession = Depends(get_db)
 ):
     """
@@ -117,9 +310,8 @@ async def generate_signal(
         target_3 = None
     
     # Create signal record
-    import uuid
     signal = Signal(
-        user_id=current_user.id,
+        user_id=1,  # Admin user
         trace_id=str(uuid.uuid4()),
         symbol=symbol,
         exchange=exchange,
@@ -144,61 +336,47 @@ async def generate_signal(
     await db.commit()
     await db.refresh(signal)
     
-    return signal
+    return {
+        "id": signal.id,
+        "user_id": signal.user_id,
+        "trace_id": signal.trace_id,
+        "symbol": signal.symbol,
+        "exchange": signal.exchange,
+        "action": signal.action.value,
+        "direction": signal.direction,
+        "status": signal.status.value,
+        "probability": signal.probability,
+        "confidence": signal.confidence,
+        "confidence_level": signal.confidence_level,
+        "risk_level": signal.risk_level,
+        "risk_warning": signal.risk_warning,
+        "entry_price": signal.entry_price,
+        "stop_loss": signal.stop_loss,
+        "target_1": signal.target_1,
+        "target_2": signal.target_2,
+        "target_3": signal.target_3,
+        "market_regime": signal.market_regime,
+        "strategy": signal.strategy,
+        "evidence_count": signal.evidence_count,
+        "reasoning": signal.reasoning,
+        "quantity": signal.quantity,
+        "allocated_capital": signal.allocated_capital,
+        "signal_time": signal.signal_time.isoformat() if signal.signal_time else None,
+        "expiry_time": signal.expiry_time.isoformat() if signal.expiry_time else None,
+        "created_at": signal.created_at.isoformat() if signal.created_at else None,
+        "updated_at": signal.updated_at.isoformat() if signal.updated_at else None,
+    }
 
 
-@router.get("/", response_model=SignalListResponse)
-async def get_signals(
-    page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=100),
-    symbol: Optional[str] = None,
-    action: Optional[str] = None,
-    status: Optional[str] = None,
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
-):
-    """Get user's signals with pagination and filtering"""
-    query = select(Signal).where(Signal.user_id == current_user.id)
-    
-    if symbol:
-        query = query.where(Signal.symbol == symbol)
-    if action:
-        query = query.where(Signal.action == action)
-    if status:
-        query = query.where(Signal.status == status)
-    
-    # Count total
-    count_query = select(Signal.id).where(Signal.user_id == current_user.id)
-    total_result = await db.execute(count_query)
-    total = len(total_result.all())
-    
-    # Paginate
-    query = query.order_by(desc(Signal.created_at))
-    query = query.offset((page - 1) * page_size).limit(page_size)
-    
-    result = await db.execute(query)
-    signals = result.scalars().all()
-    
-    return SignalListResponse(
-        signals=signals,
-        total=total,
-        page=page,
-        page_size=page_size,
-    )
-
-
-@router.get("/{signal_id}", response_model=SignalResponse)
+@router.get("/{signal_id}")
 async def get_signal(
     signal_id: int,
-    current_user: User = Depends(get_current_user),
+    admin: dict = Depends(get_admin_user),
     db: AsyncSession = Depends(get_db)
 ):
     """Get a specific signal by ID"""
     result = await db.execute(
-        select(Signal).where(and_(
-            Signal.id == signal_id,
-            Signal.user_id == current_user.id
-        ))
+        select(Signal).where(Signal.id == signal_id)
     )
     signal = result.scalar_one_or_none()
     
@@ -208,21 +386,198 @@ async def get_signal(
             detail="Signal not found"
         )
     
-    return signal
+    return {
+        "id": signal.id,
+        "user_id": signal.user_id,
+        "trace_id": signal.trace_id,
+        "symbol": signal.symbol,
+        "exchange": signal.exchange,
+        "action": signal.action.value if signal.action else "HOLD",
+        "direction": signal.direction,
+        "status": signal.status.value if signal.status else "PENDING",
+        "probability": signal.probability,
+        "confidence": signal.confidence,
+        "confidence_level": signal.confidence_level,
+        "risk_level": signal.risk_level,
+        "risk_warning": signal.risk_warning,
+        "entry_price": signal.entry_price,
+        "stop_loss": signal.stop_loss,
+        "target_1": signal.target_1,
+        "target_2": signal.target_2,
+        "target_3": signal.target_3,
+        "market_regime": signal.market_regime,
+        "strategy": signal.strategy,
+        "evidence_count": signal.evidence_count,
+        "reasoning": signal.reasoning,
+        "quantity": signal.quantity,
+        "allocated_capital": signal.allocated_capital,
+        "signal_time": signal.signal_time.isoformat() if signal.signal_time else None,
+        "expiry_time": signal.expiry_time.isoformat() if signal.expiry_time else None,
+        "created_at": signal.created_at.isoformat() if signal.created_at else None,
+        "updated_at": signal.updated_at.isoformat() if signal.updated_at else None,
+    }
+
+
+@router.get("/trace/{trace_id}")
+async def get_signal_by_trace_id(
+    trace_id: str,
+    admin: dict = Depends(get_admin_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Get a signal by trace ID"""
+    result = await db.execute(
+        select(Signal).where(Signal.trace_id == trace_id)
+    )
+    signal = result.scalar_one_or_none()
+    
+    if not signal:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Signal not found"
+        )
+    
+    return {
+        "id": signal.id,
+        "user_id": signal.user_id,
+        "trace_id": signal.trace_id,
+        "symbol": signal.symbol,
+        "exchange": signal.exchange,
+        "action": signal.action.value if signal.action else "HOLD",
+        "direction": signal.direction,
+        "status": signal.status.value if signal.status else "PENDING",
+        "probability": signal.probability,
+        "confidence": signal.confidence,
+        "confidence_level": signal.confidence_level,
+        "risk_level": signal.risk_level,
+        "risk_warning": signal.risk_warning,
+        "entry_price": signal.entry_price,
+        "stop_loss": signal.stop_loss,
+        "target_1": signal.target_1,
+        "target_2": signal.target_2,
+        "target_3": signal.target_3,
+        "market_regime": signal.market_regime,
+        "strategy": signal.strategy,
+        "evidence_count": signal.evidence_count,
+        "reasoning": signal.reasoning,
+        "quantity": signal.quantity,
+        "allocated_capital": signal.allocated_capital,
+        "signal_time": signal.signal_time.isoformat() if signal.signal_time else None,
+        "expiry_time": signal.expiry_time.isoformat() if signal.expiry_time else None,
+        "created_at": signal.created_at.isoformat() if signal.created_at else None,
+        "updated_at": signal.updated_at.isoformat() if signal.updated_at else None,
+    }
+
+
+@router.get("/symbol/{symbol}")
+async def get_signals_by_symbol(
+    symbol: str,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    admin: dict = Depends(get_admin_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Get signals for a specific symbol"""
+    # Count total
+    count_query = select(func.count(Signal.id)).where(Signal.symbol == symbol)
+    total_result = await db.execute(count_query)
+    total = total_result.scalar() or 0
+    
+    # Paginate
+    query = select(Signal).where(Signal.symbol == symbol)
+    query = query.order_by(desc(Signal.created_at))
+    query = query.offset((page - 1) * page_size).limit(page_size)
+    
+    result = await db.execute(query)
+    signals = result.scalars().all()
+    
+    return {
+        "signals": [
+            {
+                "id": s.id,
+                "user_id": s.user_id,
+                "trace_id": s.trace_id,
+                "symbol": s.symbol,
+                "exchange": s.exchange,
+                "action": s.action.value if s.action else "HOLD",
+                "direction": s.direction,
+                "status": s.status.value if s.status else "PENDING",
+                "probability": s.probability,
+                "confidence": s.confidence,
+                "confidence_level": s.confidence_level,
+                "risk_level": s.risk_level,
+                "risk_warning": s.risk_warning,
+                "entry_price": s.entry_price,
+                "stop_loss": s.stop_loss,
+                "target_1": s.target_1,
+                "target_2": s.target_2,
+                "target_3": s.target_3,
+                "market_regime": s.market_regime,
+                "strategy": s.strategy,
+                "evidence_count": s.evidence_count,
+                "reasoning": s.reasoning,
+                "quantity": s.quantity,
+                "allocated_capital": s.allocated_capital,
+                "signal_time": s.signal_time.isoformat() if s.signal_time else None,
+                "expiry_time": s.expiry_time.isoformat() if s.expiry_time else None,
+                "created_at": s.created_at.isoformat() if s.created_at else None,
+                "updated_at": s.updated_at.isoformat() if s.updated_at else None,
+            }
+            for s in signals
+        ],
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "has_next": (page * page_size) < total,
+    }
+
+
+@router.patch("/{signal_id}")
+async def update_signal(
+    signal_id: int,
+    status: Optional[str] = None,
+    quantity: Optional[int] = None,
+    allocated_capital: Optional[float] = None,
+    admin: dict = Depends(get_admin_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Update a signal"""
+    result = await db.execute(
+        select(Signal).where(Signal.id == signal_id)
+    )
+    signal = result.scalar_one_or_none()
+    
+    if not signal:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Signal not found"
+        )
+    
+    if status:
+        signal.status = SignalStatus(status)
+    if quantity is not None:
+        signal.quantity = quantity
+    if allocated_capital is not None:
+        signal.allocated_capital = allocated_capital
+    
+    await db.commit()
+    
+    return {
+        "id": signal.id,
+        "status": signal.status.value,
+        "quantity": signal.quantity,
+        "allocated_capital": signal.allocated_capital,
+    }
 
 
 @router.post("/{signal_id}/cancel")
 async def cancel_signal(
     signal_id: int,
-    current_user: User = Depends(get_current_user),
+    admin: dict = Depends(get_admin_user),
     db: AsyncSession = Depends(get_db)
 ):
     """Cancel an active signal"""
     result = await db.execute(
-        select(Signal).where(and_(
-            Signal.id == signal_id,
-            Signal.user_id == current_user.id
-        ))
+        select(Signal).where(Signal.id == signal_id)
     )
     signal = result.scalar_one_or_none()
     
@@ -241,4 +596,8 @@ async def cancel_signal(
     signal.status = SignalStatus.CANCELLED
     await db.commit()
     
-    return {"message": "Signal cancelled", "signal_id": signal_id}
+    return {
+        "id": signal.id,
+        "status": signal.status.value,
+        "message": "Signal cancelled",
+    }

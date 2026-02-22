@@ -1,232 +1,180 @@
 """
-Authentication Endpoints
-User registration, login, token management
+Simple Admin Authentication
+Single password login for admin only
 """
 
-from datetime import datetime, timedelta
-from typing import Annotated
+from datetime import datetime
+from typing import Annotated, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
+from pydantic import BaseModel
 
-from app.core import (
-    get_db,
-    settings,
-    create_access_token,
-    create_refresh_token,
-    get_password_hash,
-    verify_password,
-    verify_token,
-)
-from app.models import User, UserRole, Plan
-from app.schemas import (
-    UserCreate,
-    UserResponse,
-    UserLogin,
-    Token,
-    PasswordChange,
+from app.core.admin_config import (
+    admin_settings,
+    create_admin_token,
+    verify_admin_token,
 )
 
 router = APIRouter()
 security = HTTPBearer()
 
 
+# ==================== SCHEMAS ====================
+
+class AdminLogin(BaseModel):
+    """Admin login request"""
+    password: str
+
+
+class AdminToken(BaseModel):
+    """Token response"""
+    access_token: str
+    token_type: str = "bearer"
+    expires_in: int  # seconds
+
+
+class AdminInfo(BaseModel):
+    """Admin info response"""
+    username: str = "admin"
+    role: str = "ADMIN"
+    login_time: datetime
+    session_expires: datetime
+
+
+class PasswordChange(BaseModel):
+    """Change password request"""
+    current_password: str
+    new_password: str
+
+
 # ==================== DEPENDENCIES ====================
 
-async def get_current_user(
-    credentials: Annotated[HTTPAuthorizationCredentials, Depends(security)],
-    db: Annotated[AsyncSession, Depends(get_db)]
-) -> User:
-    """Get current authenticated user"""
+async def get_admin_user(
+    credentials: Annotated[HTTPAuthorizationCredentials, Depends(security)]
+) -> dict:
+    """Verify admin token - dependency for protected routes"""
     token = credentials.credentials
-    user_id = verify_token(token)
     
-    if not user_id:
+    payload = verify_admin_token(token)
+    
+    if not payload:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired token",
+            detail="Invalid or expired token. Please login again.",
+            headers={"WWW-Authenticate": "Bearer"},
         )
     
-    result = await db.execute(select(User).where(User.id == int(user_id)))
-    user = result.scalar_one_or_none()
-    
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User not found",
-        )
-    
-    if not user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="User account is disabled",
-        )
-    
-    return user
+    return payload
 
 
 # ==================== ENDPOINTS ====================
 
-@router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
-async def register(
-    user_data: UserCreate,
-    db: Annotated[AsyncSession, Depends(get_db)]
+@router.post("/login", response_model=AdminToken)
+async def admin_login(
+    credentials: AdminLogin
 ):
-    """Register a new user"""
-    # Check if email exists
-    result = await db.execute(select(User).where(User.email == user_data.email))
-    if result.scalar_one_or_none():
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Email already registered"
-        )
+    """
+    Admin login with password only
     
-    # Check if mobile exists
-    result = await db.execute(select(User).where(User.mobile == user_data.mobile))
-    if result.scalar_one_or_none():
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Mobile number already registered"
-        )
-    
-    # Create user
-    user = User(
-        email=user_data.email,
-        mobile=user_data.mobile,
-        first_name=user_data.first_name,
-        last_name=user_data.last_name,
-        hashed_password=get_password_hash(user_data.password),
-        role=UserRole.TRADER,
-        plan=Plan.FREE,
-        is_active=True,
-        is_verified=False,
-        onboarding_completed=False,
-    )
-    
-    db.add(user)
-    await db.commit()
-    await db.refresh(user)
-    
-    return user
-
-
-@router.post("/login", response_model=Token)
-async def login(
-    credentials: UserLogin,
-    db: Annotated[AsyncSession, Depends(get_db)]
-):
-    """Login and get access tokens"""
-    # Find user
-    result = await db.execute(select(User).where(User.email == credentials.email))
-    user = result.scalar_one_or_none()
-    
-    if not user or not verify_password(credentials.password, user.hashed_password):
+    Default password: admin123 (CHANGE IN PRODUCTION!)
+    Set ADMIN_PASSWORD environment variable for custom password
+    """
+    # Verify password
+    if not admin_settings.verify_password(credentials.password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid email or password"
+            detail="Invalid password",
         )
     
-    if not user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Account is disabled"
-        )
+    # Create token
+    token = create_admin_token()
     
-    # Check MFA if enabled
-    if user.mfa_enabled:
-        if not credentials.totp_code:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="TOTP code required"
-            )
-        # Verify TOTP code here
-    
-    # Update last login
-    user.last_login = datetime.utcnow()
-    await db.commit()
-    
-    # Create tokens
-    access_token = create_access_token(subject=user.id)
-    refresh_token = create_refresh_token(subject=user.id)
-    
-    return Token(
-        access_token=access_token,
-        refresh_token=refresh_token,
+    return AdminToken(
+        access_token=token,
         token_type="bearer",
-        expires_in=settings.access_token_expire_minutes * 60,
+        expires_in=admin_settings.jwt_expire_hours * 3600,
     )
 
 
-@router.post("/refresh", response_model=Token)
-async def refresh_token(
-    credentials: Annotated[HTTPAuthorizationCredentials, Depends(security)],
-    db: Annotated[AsyncSession, Depends(get_db)]
+@router.get("/me", response_model=AdminInfo)
+async def get_admin_info(
+    admin: Annotated[dict, Depends(get_admin_user)]
 ):
-    """Refresh access token"""
-    token = credentials.credentials
-    user_id = verify_token(token, token_type="refresh")
+    """Get current admin info"""
+    from datetime import timedelta
     
-    if not user_id:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid refresh token"
-        )
+    now = datetime.utcnow()
     
-    result = await db.execute(select(User).where(User.id == int(user_id)))
-    user = result.scalar_one_or_none()
-    
-    if not user or not user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User not found or inactive"
-        )
-    
-    # Create new tokens
-    access_token = create_access_token(subject=user.id)
-    refresh_token = create_refresh_token(subject=user.id)
-    
-    return Token(
-        access_token=access_token,
-        refresh_token=refresh_token,
-        token_type="bearer",
-        expires_in=settings.access_token_expire_minutes * 60,
+    return AdminInfo(
+        username="admin",
+        role="ADMIN",
+        login_time=now,
+        session_expires=now + timedelta(hours=admin_settings.jwt_expire_hours),
     )
-
-
-@router.get("/me", response_model=UserResponse)
-async def get_current_user_profile(
-    current_user: Annotated[User, Depends(get_current_user)]
-):
-    """Get current user profile"""
-    return current_user
 
 
 @router.post("/change-password")
 async def change_password(
     password_data: PasswordChange,
-    current_user: Annotated[User, Depends(get_current_user)],
-    db: Annotated[AsyncSession, Depends(get_db)]
+    admin: Annotated[dict, Depends(get_admin_user)]
 ):
-    """Change user password"""
-    if not verify_password(password_data.current_password, current_user.hashed_password):
+    """
+    Change admin password
+    
+    Note: In production, you need to update the ADMIN_PASSWORD
+    environment variable or configuration file
+    """
+    # Verify current password
+    if not admin_settings.verify_password(password_data.current_password):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Current password is incorrect"
         )
     
-    current_user.hashed_password = get_password_hash(password_data.new_password)
-    current_user.last_password_change = datetime.utcnow()
+    # Validate new password
+    if len(password_data.new_password) < 6:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="New password must be at least 6 characters"
+        )
     
-    await db.commit()
+    # Update password
+    admin_settings.change_password(password_data.new_password)
     
-    return {"message": "Password changed successfully"}
+    return {
+        "message": "Password changed successfully. Please login again with new password.",
+        "note": "In production, update ADMIN_PASSWORD environment variable"
+    }
 
 
 @router.post("/logout")
-async def logout(
-    current_user: Annotated[User, Depends(get_current_user)]
+async def admin_logout(
+    admin: Annotated[dict, Depends(get_admin_user)]
 ):
-    """Logout user (client should discard tokens)"""
+    """Logout admin (client should discard token)"""
     return {"message": "Logged out successfully"}
+
+
+@router.post("/verify")
+async def verify_token(
+    admin: Annotated[dict, Depends(get_admin_user)]
+):
+    """Verify if token is still valid"""
+    return {
+        "valid": True,
+        "admin": admin.get("sub"),
+        "role": admin.get("role"),
+    }
+
+
+# ==================== HEALTH CHECK ====================
+
+@router.get("/health")
+async def auth_health():
+    """Auth service health check"""
+    return {
+        "status": "ok",
+        "service": "admin-auth",
+        "default_password_hint": "Default: admin123 (change via ADMIN_PASSWORD env)"
+    }
