@@ -1,105 +1,47 @@
 """
-Database Models Package
-All SQLAlchemy models for the Trading AI system
+Database Models Package - Simplified for Single Admin
+Only essential models for trading system
 """
 
-from app.models.user import User, UserRole, Plan
-from app.models.tenant import Tenant, TenantStatus, TenantPlan
-from app.models.signal import (
-    Signal,
-    SignalAction,
-    SignalDirection,
-    SignalStatus,
-    ConfidenceLevel,
-    RiskLevel,
-    MarketRegime,
+from app.models.simple_admin import (
+    AdminState,
+    CapitalState,
+    PnLState,
+    PositionState,
+    RiskState,
+    TradeStats,
+    MarketSession,
+    RiskStatus,
+    admin_state,
 )
-from app.models.order import (
-    Order,
-    OrderType,
-    OrderStatus,
-    ProductType,
-    OrderSide,
-)
-from app.models.position import (
-    Position,
-    PositionSide,
-    PositionStatus,
-)
-from app.models.api_key import APIKey, APIKeyStatus, APIKeyScope
-from app.models.audit_log import AuditLog, AuditAction, AuditSeverity
-from app.models.market_data import MarketData, OHLCV, MarketSession
-from app.models.portfolio import Portfolio, PortfolioSnapshot, PortfolioStatus
-from app.models.subscription import Subscription, Payment, SubscriptionStatus, PaymentStatus
-from app.models.notification import (
-    Notification,
-    NotificationPreference,
-    NotificationType,
-    NotificationPriority,
-    NotificationChannel,
-)
-from app.models.trade_journal import (
-    TradeJournal,
-    TradeEmotion,
-    TradeOutcome,
+
+from app.models.swing_trade import (
+    SwingTrade,
+    SwingTradeStatus,
+    SwingTradeSignal,
+    Timeframe,
+    ExitReason,
+    HistoricalAnalysis,
+    MarketDataCache,
 )
 
 __all__ = [
-    # User
-    "User",
-    "UserRole",
-    "Plan",
-    # Tenant
-    "Tenant",
-    "TenantStatus",
-    "TenantPlan",
-    # Signal
-    "Signal",
-    "SignalAction",
-    "SignalDirection",
-    "SignalStatus",
-    "ConfidenceLevel",
-    "RiskLevel",
-    "MarketRegime",
-    # Order
-    "Order",
-    "OrderType",
-    "OrderStatus",
-    "ProductType",
-    "OrderSide",
-    # Position
-    "Position",
-    "PositionSide",
-    "PositionStatus",
-    # API Key
-    "APIKey",
-    "APIKeyStatus",
-    "APIKeyScope",
-    # Audit Log
-    "AuditLog",
-    "AuditAction",
-    "AuditSeverity",
-    # Market Data
-    "MarketData",
-    "OHLCV",
+    # Admin State (Single User)
+    "AdminState",
+    "CapitalState",
+    "PnLState",
+    "PositionState",
+    "RiskState",
+    "TradeStats",
     "MarketSession",
-    # Portfolio
-    "Portfolio",
-    "PortfolioSnapshot",
-    "PortfolioStatus",
-    # Subscription
-    "Subscription",
-    "Payment",
-    "SubscriptionStatus",
-    "PaymentStatus",
-    # Notification
-    "Notification",
-    "NotificationPreference",
-    "NotificationType",
-    "NotificationPriority",
-    "NotificationChannel",
-    # Trade Journal
-    "TradeJournal",
-    "TradeEmotion",
-    "TradeOutcome",
+    "RiskStatus",
+    "admin_state",
+    # Swing Trade
+    "SwingTrade",
+    "SwingTradeStatus",
+    "SwingTradeSignal",
+    "Timeframe",
+    "ExitReason",
+    "HistoricalAnalysis",
+    "MarketDataCache",
 ]

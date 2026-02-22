@@ -32,6 +32,24 @@ from app.engines.strategy_ensemble import (
     MomentumStrategy,
     strategy_ensemble,
 )
+from app.engines.pre_momentum import (
+    PreMomentumEngine,
+    PreMomentumSignal,
+    PreMomentumResult,
+    OrderBookSnapshot,
+    Trade,
+    OrderFlowImbalance,
+    VolumeAccelerator,
+    SpreadAnalyzer,
+    LargeLotDetector,
+    PricePatternDetector,
+    pre_momentum_engine,
+)
+from app.engines.enhanced_signal_generator import (
+    EnhancedSignalGenerator,
+    EnhancedSignal,
+    enhanced_signal_generator,
+)
 
 __all__ = [
     # Probability Engine
@@ -60,4 +78,20 @@ __all__ = [
     "RsiExtremeStrategy",
     "MomentumStrategy",
     "strategy_ensemble",
+    # Pre-Momentum Engine
+    "PreMomentumEngine",
+    "PreMomentumSignal",
+    "PreMomentumResult",
+    "OrderBookSnapshot",
+    "Trade",
+    "OrderFlowImbalance",
+    "VolumeAccelerator",
+    "SpreadAnalyzer",
+    "LargeLotDetector",
+    "PricePatternDetector",
+    "pre_momentum_engine",
+    # Enhanced Signal Generator
+    "EnhancedSignalGenerator",
+    "EnhancedSignal",
+    "enhanced_signal_generator",
 ]

@@ -1,40 +1,33 @@
 """
-Core module exports
+Core Package - Simplified for Single Admin
 """
 
-# Import config first to ensure settings are loaded
-from app.core.config import Settings, get_settings, settings
-
-# Then import database (which uses settings)
-from app.core.database import Base, async_session_maker, engine, get_db, init_db, close_db
-
-# Then import security
-from app.core.security import (
-    create_access_token,
-    create_refresh_token,
-    decode_token,
-    get_password_hash,
-    verify_password,
-    verify_token,
+from app.core.database import (
+    Base,
+    get_db,
+    get_db_context,
+    init_db,
+    close_db,
+    check_db_health,
+)
+from app.core.admin_config import (
+    admin_config,
+    get_admin_config,
+    get_broker_credentials,
+    get_notification_settings,
+    get_trading_settings,
 )
 
 __all__ = [
-    # Config
-    "Settings",
-    "settings",
-    "get_settings",
-    # Database
     "Base",
-    "engine",
-    "async_session_maker",
     "get_db",
+    "get_db_context",
     "init_db",
     "close_db",
-    # Security
-    "create_access_token",
-    "create_refresh_token",
-    "decode_token",
-    "get_password_hash",
-    "verify_password",
-    "verify_token",
+    "check_db_health",
+    "admin_config",
+    "get_admin_config",
+    "get_broker_credentials",
+    "get_notification_settings",
+    "get_trading_settings",
 ]

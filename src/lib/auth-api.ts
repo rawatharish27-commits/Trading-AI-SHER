@@ -1,70 +1,46 @@
-// Auth API Service
+// Simple Admin Auth API Service
 import { api } from './api-client';
 
-// Types
-export interface User {
-  id: number;
-  email: string;
-  mobile: string;
-  first_name: string | null;
-  last_name: string | null;
-  role: 'ADMIN' | 'TRADER' | 'VIEWER' | 'TENANT_OWNER';
-  plan: 'FREE' | 'PRO' | 'ELITE' | 'INSTITUTIONAL';
-  is_active: boolean;
-  is_verified: boolean;
-  onboarding_completed: boolean;
-  mfa_enabled: boolean;
-  created_at: string;
-  updated_at: string;
+// Admin User type (simplified)
+export interface AdminUser {
+  username: string;
+  role: string;
+  login_time: string;
+  session_expires: string;
 }
 
-export interface LoginCredentials {
-  email: string;
+// Login request (password only)
+export interface AdminLoginCredentials {
   password: string;
-  totp_code?: string;
 }
 
-export interface RegisterData {
-  email: string;
-  mobile: string;
-  password: string;
-  confirm_password: string;
-  first_name?: string;
-  last_name?: string;
-}
-
+// Token response
 export interface TokenResponse {
   access_token: string;
-  refresh_token: string;
   token_type: string;
   expires_in: number;
 }
 
+// Password change
 export interface PasswordChange {
   current_password: string;
   new_password: string;
-  confirm_password: string;
 }
 
-// Auth API
+// Admin Auth API
 export const authApi = {
-  // Login
-  async login(credentials: LoginCredentials): Promise<{ token: TokenResponse; user: User }> {
+  // Admin Login (password only)
+  async login(credentials: AdminLoginCredentials): Promise<{ token: TokenResponse; user: AdminUser }> {
     const token = await api.post<TokenResponse>('/auth/login', credentials);
     
-    // Get user profile
-    const user = await api.get<User>('/auth/me');
+    // Get admin info
+    const user = await api.get<AdminUser>('/auth/me');
     
-    // Store tokens and user
-    api.setTokens(token.access_token, token.refresh_token);
-    api.setUser(user);
+    // Store token and user
+    api.setTokens(token.access_token, null);
+    api.setUser(user as any);
     
     return { token, user };
-  },
-
-  // Register
-  async register(data: RegisterData): Promise<User> {
-    return api.post<User>('/auth/register', data);
   },
 
   // Logout
@@ -76,42 +52,19 @@ export const authApi = {
     }
   },
 
-  // Get current user
-  async getCurrentUser(): Promise<User> {
-    return api.get<User>('/auth/me');
-  },
-
-  // Refresh token
-  async refreshToken(): Promise<TokenResponse> {
-    const refreshToken = typeof window !== 'undefined' 
-      ? localStorage.getItem('refreshToken') 
-      : null;
-    
-    if (!refreshToken) {
-      throw new Error('No refresh token available');
-    }
-
-    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1'}/auth/refresh`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${refreshToken}`,
-      },
-    });
-
-    if (!response.ok) {
-      api.clearTokens();
-      throw new Error('Failed to refresh token');
-    }
-
-    const token: TokenResponse = await response.json();
-    api.setTokens(token.access_token, token.refresh_token);
-    return token;
+  // Get current admin info
+  async getCurrentUser(): Promise<AdminUser> {
+    return api.get<AdminUser>('/auth/me');
   },
 
   // Change password
   async changePassword(data: PasswordChange): Promise<{ message: string }> {
     return api.post('/auth/change-password', data);
+  },
+
+  // Verify token
+  async verifyToken(): Promise<{ valid: boolean; admin: string; role: string }> {
+    return api.post('/auth/verify', {});
   },
 
   // Check if authenticated
@@ -120,8 +73,8 @@ export const authApi = {
   },
 
   // Get stored user
-  getStoredUser(): User | null {
-    return api.getUser();
+  getStoredUser(): AdminUser | null {
+    return api.getUser() as AdminUser | null;
   },
 };
 

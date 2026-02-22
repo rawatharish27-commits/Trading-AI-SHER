@@ -21,7 +21,7 @@ interface Position {
 
 const mockPositions: Position[] = [
   { symbol: "RELIANCE", exchange: "NSE", side: "LONG", quantity: 50, openQuantity: 50, entryPrice: 2420.50, ltp: 2456.75, pnl: 1812.50, pnlPercent: 1.5, stopLoss: 2380, target: 2520, value: 122837.50, sector: "Energy" },
-  { symbol: "TCS", exchange: "NSE", side: "LONG", quantity: 25, openQuantity: 25, entryPrice: 3500.00, ltp: 3542.00, pnl: 1050.00, pnlPercent: 1.2, stopLoss: 3450, target: 3650, value: 88550. sector: "IT" },
+  { symbol: "TCS", exchange: "NSE", side: "LONG", quantity: 25, openQuantity: 25, entryPrice: 3500.00, ltp: 3542.00, pnl: 1050.00, pnlPercent: 1.2, stopLoss: 3450, target: 3650, value: 88550, sector: "IT" },
   { symbol: "INFY", exchange: "NSE", side: "LONG", quantity: 100, openQuantity: 100, entryPrice: 1485.25, ltp: 1472.50, pnl: -1275.00, pnlPercent: -0.86, stopLoss: 1450, value: 147250, sector: "IT" },
   { symbol: "HDFCBANK", exchange: "NSE", side: "LONG", quantity: 75, openQuantity: 75, entryPrice: 1650.00, ltp: 1682.50, pnl: 2437.50, pnlPercent: 1.97, target: 1750, value: 126187.50, sector: "Banking" },
   { symbol: "ICICIBANK", exchange: "NSE", side: "LONG", quantity: 100, openQuantity: 100, entryPrice: 1085.00, ltp: 1092.25, pnl: 725.00, pnlPercent: 0.67, value: 109225, sector: "Banking" },
