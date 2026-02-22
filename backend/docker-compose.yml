@@ -1,0 +1,130 @@
+version: '3.8'
+
+services:
+  # ===== Application =====
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: sher-api
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://sher:sher@postgres:5432/sher
+      - REDIS_URL=redis://redis:6379/0
+      - ENVIRONMENT=production
+    env_file:
+      - .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./models:/app/models
+      - ./logs:/app/logs
+    networks:
+      - sher-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # ===== Database =====
+  postgres:
+    image: postgres:15-alpine
+    container_name: sher-postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=sher
+      - POSTGRES_PASSWORD=sher
+      - POSTGRESDB=sher
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - sher-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sher -d sher"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ===== Redis Cache =====
+  redis:
+    image: redis:7-alpine
+    container_name: sher-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - redis-data:/data
+    networks:
+      - sher-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ===== Nginx Reverse Proxy =====
+  nginx:
+    image: nginx:alpine
+    container_name: sher-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./certs:/etc/nginx/certs:ro
+    depends_on:
+      - api
+    networks:
+      - sher-network
+
+  # ===== Prometheus Monitoring =====
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: sher-prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+    networks:
+      - sher-network
+
+  # ===== Grafana Dashboard =====
+  grafana:
+    image: grafana/grafana:latest
+    container_name: sher-grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      - prometheus
+    networks:
+      - sher-network
+
+# ===== Networks =====
+networks:
+  sher-network:
+    driver: bridge
+
+# ===== Volumes =====
+volumes:
+  postgres-data:
+  redis-data:
+  prometheus-data:
+  grafana-data:
