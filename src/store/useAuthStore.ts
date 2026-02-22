@@ -1,22 +1,35 @@
+"use client";
+
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { User, AuthState } from '@/types/auth';
-import { authApi } from '@/lib/auth';
+import { User, TokenResponse } from '@/lib/auth-api';
+import { authApi } from '@/lib/auth-api';
 
-interface AuthStore extends AuthState {
+interface AuthState {
+  user: User | null;
+  isAuthenticated: boolean;
+  isLoading: boolean;
+  error: string | null;
+  
+  // Actions
   login: (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string, name: string) => Promise<void>;
+  register: (data: {
+    email: string;
+    mobile: string;
+    password: string;
+    confirm_password: string;
+    first_name?: string;
+    last_name?: string;
+  }) => Promise<void>;
   logout: () => Promise<void>;
   fetchUser: () => Promise<void>;
-  setUser: (user: User | null) => void;
-  setLoading: (loading: boolean) => void;
-  setError: (error: string | null) => void;
   clearError: () => void;
+  setUser: (user: User | null) => void;
 }
 
-export const useAuthStore = create<AuthStore>()(
+export const useAuthStore = create<AuthState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       user: null,
       isAuthenticated: false,
       isLoading: false,
@@ -25,36 +38,29 @@ export const useAuthStore = create<AuthStore>()(
       login: async (email: string, password: string) => {
         set({ isLoading: true, error: null });
         try {
-          const response = await authApi.login({ email, password });
-          set({
-            user: response.user,
-            isAuthenticated: true,
+          const { user } = await authApi.login({ email, password });
+          set({ user, isAuthenticated: true, isLoading: false });
+        } catch (error: any) {
+          set({ 
+            error: error.message || 'Login failed', 
             isLoading: false,
+            isAuthenticated: false,
+            user: null 
           });
-        } catch (error) {
-          const message = error instanceof Error ? error.message : 'Login failed';
-          set({ error: message, isLoading: false });
           throw error;
         }
       },
 
-      register: async (email: string, password: string, name: string) => {
+      register: async (data) => {
         set({ isLoading: true, error: null });
         try {
-          const response = await authApi.register({
-            email,
-            password,
-            name,
-            confirmPassword: password,
+          await authApi.register(data);
+          set({ isLoading: false });
+        } catch (error: any) {
+          set({ 
+            error: error.message || 'Registration failed', 
+            isLoading: false 
           });
-          set({
-            user: response.user,
-            isAuthenticated: true,
-            isLoading: false,
-          });
-        } catch (error) {
-          const message = error instanceof Error ? error.message : 'Registration failed';
-          set({ error: message, isLoading: false });
           throw error;
         }
       },
@@ -64,54 +70,43 @@ export const useAuthStore = create<AuthStore>()(
         try {
           await authApi.logout();
         } finally {
-          set({
-            user: null,
-            isAuthenticated: false,
+          set({ 
+            user: null, 
+            isAuthenticated: false, 
             isLoading: false,
-            error: null,
+            error: null 
           });
         }
       },
 
       fetchUser: async () => {
+        if (!authApi.isAuthenticated()) {
+          set({ isAuthenticated: false, user: null });
+          return;
+        }
+        
         set({ isLoading: true });
         try {
           const user = await authApi.getCurrentUser();
-          set({
-            user,
-            isAuthenticated: true,
-            isLoading: false,
-          });
-        } catch {
-          set({
-            user: null,
-            isAuthenticated: false,
-            isLoading: false,
+          set({ user, isAuthenticated: true, isLoading: false });
+        } catch (error) {
+          set({ 
+            user: null, 
+            isAuthenticated: false, 
+            isLoading: false 
           });
         }
       },
 
-      setUser: (user) => {
-        set({ user, isAuthenticated: !!user });
-      },
+      clearError: () => set({ error: null }),
 
-      setLoading: (isLoading) => {
-        set({ isLoading });
-      },
-
-      setError: (error) => {
-        set({ error });
-      },
-
-      clearError: () => {
-        set({ error: null });
-      },
+      setUser: (user) => set({ user, isAuthenticated: !!user }),
     }),
     {
       name: 'auth-storage',
-      partialize: (state) => ({
-        user: state.user,
-        isAuthenticated: state.isAuthenticated,
+      partialize: (state) => ({ 
+        user: state.user, 
+        isAuthenticated: state.isAuthenticated 
       }),
     }
   )

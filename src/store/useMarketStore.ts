@@ -1,179 +1,125 @@
-import { create } from 'zustand';
-import { MarketQuote, MarketOverview, Watchlist, QuoteUpdate } from '@/types/market';
-import { marketApi } from '@/lib/market';
+"use client";
 
-interface MarketStore {
-  quotes: Record<string, MarketQuote>;
-  overview: MarketOverview | null;
-  watchlist: Watchlist[];
+import { create } from 'zustand';
+import { Quote, MarketIndex, MarketMover, MarketStatus } from '@/lib/market-api';
+import { marketApi } from '@/lib/market-api';
+
+interface MarketState {
+  quotes: Record<string, Quote>;
+  indices: MarketIndex[];
+  gainers: MarketMover[];
+  losers: MarketMover[];
+  marketStatus: MarketStatus | null;
+  watchlist: string[];
   isLoading: boolean;
   error: string | null;
-  lastUpdated: string | null;
-
+  
   // Actions
   fetchQuote: (symbol: string) => Promise<void>;
   fetchQuotes: (symbols: string[]) => Promise<void>;
-  fetchOverview: () => Promise<void>;
-  fetchWatchlist: () => Promise<void>;
-  addToWatchlist: (symbol: string, notes?: string) => Promise<void>;
-  removeFromWatchlist: (symbol: string) => Promise<void>;
-  updateQuote: (symbol: string, update: Partial<MarketQuote>) => void;
-  updateQuoteFromSocket: (update: QuoteUpdate) => void;
-  setLoading: (loading: boolean) => void;
-  setError: (error: string | null) => void;
+  fetchIndices: () => Promise<void>;
+  fetchMovers: () => Promise<void>;
+  fetchMarketStatus: () => Promise<void>;
+  addToWatchlist: (symbol: string) => void;
+  removeFromWatchlist: (symbol: string) => void;
+  updateQuote: (symbol: string, quote: Partial<Quote>) => void;
   clearError: () => void;
   reset: () => void;
 }
 
-export const useMarketStore = create<MarketStore>((set, get) => ({
+export const useMarketStore = create<MarketState>((set, get) => ({
   quotes: {},
-  overview: null,
-  watchlist: [],
+  indices: [],
+  gainers: [],
+  losers: [],
+  marketStatus: null,
+  watchlist: ['RELIANCE', 'TCS', 'INFY', 'HDFCBANK', 'ICICIBANK'],
   isLoading: false,
   error: null,
-  lastUpdated: null,
 
   fetchQuote: async (symbol: string) => {
     try {
       const quote = await marketApi.getQuote(symbol);
       set((state) => ({
         quotes: { ...state.quotes, [symbol]: quote },
-        lastUpdated: new Date().toISOString(),
       }));
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to fetch quote';
-      set({ error: message });
+    } catch (error: any) {
+      console.error(`Failed to fetch quote for ${symbol}:`, error);
     }
   },
 
   fetchQuotes: async (symbols: string[]) => {
-    if (symbols.length === 0) return;
-    
-    set({ isLoading: true, error: null });
     try {
       const quotes = await marketApi.getQuotes(symbols);
-      const quotesMap = quotes.reduce((acc, quote) => {
-        acc[quote.symbol] = quote;
-        return acc;
-      }, {} as Record<string, MarketQuote>);
-      
       set((state) => ({
-        quotes: { ...state.quotes, ...quotesMap },
-        isLoading: false,
-        lastUpdated: new Date().toISOString(),
+        quotes: { ...state.quotes, ...quotes },
       }));
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to fetch quotes';
-      set({ error: message, isLoading: false });
+    } catch (error: any) {
+      console.error('Failed to fetch quotes:', error);
     }
   },
 
-  fetchOverview: async () => {
-    set({ isLoading: true, error: null });
+  fetchIndices: async () => {
     try {
-      const overview = await marketApi.getOverview();
-      set({ overview, isLoading: false });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to fetch market overview';
-      set({ error: message, isLoading: false });
+      const indices = await marketApi.getIndices();
+      set({ indices });
+    } catch (error: any) {
+      console.error('Failed to fetch indices:', error);
     }
   },
 
-  fetchWatchlist: async () => {
+  fetchMovers: async () => {
     try {
-      const watchlist = await marketApi.getWatchlist();
-      set({ watchlist });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to fetch watchlist';
-      set({ error: message });
+      const [gainers, losers] = await Promise.all([
+        marketApi.getGainers(10),
+        marketApi.getLosers(10),
+      ]);
+      set({ gainers, losers });
+    } catch (error: any) {
+      console.error('Failed to fetch movers:', error);
     }
   },
 
-  addToWatchlist: async (symbol: string, notes?: string) => {
+  fetchMarketStatus: async () => {
     try {
-      const item = await marketApi.addToWatchlist(symbol, notes);
-      set((state) => ({
-        watchlist: [...state.watchlist, item],
-      }));
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to add to watchlist';
-      set({ error: message });
-      throw error;
+      const status = await marketApi.getStatus();
+      set({ marketStatus: status });
+    } catch (error: any) {
+      console.error('Failed to fetch market status:', error);
     }
   },
 
-  removeFromWatchlist: async (symbol: string) => {
-    try {
-      await marketApi.removeFromWatchlist(symbol);
-      set((state) => ({
-        watchlist: state.watchlist.filter((w) => 
-          !w.items.some((item) => item.symbol === symbol)
-        ),
-      }));
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to remove from watchlist';
-      set({ error: message });
-      throw error;
-    }
-  },
-
-  updateQuote: (symbol: string, update: Partial<MarketQuote>) => {
+  addToWatchlist: (symbol: string) => {
     set((state) => {
-      const existingQuote = state.quotes[symbol];
-      if (!existingQuote) return state;
-      
-      return {
-        quotes: {
-          ...state.quotes,
-          [symbol]: { ...existingQuote, ...update },
-        },
-        lastUpdated: new Date().toISOString(),
-      };
+      if (state.watchlist.includes(symbol)) return state;
+      return { watchlist: [...state.watchlist, symbol] };
     });
   },
 
-  updateQuoteFromSocket: (update: QuoteUpdate) => {
-    set((state) => {
-      const existingQuote = state.quotes[update.symbol];
-      if (!existingQuote) return state;
-      
-      return {
-        quotes: {
-          ...state.quotes,
-          [update.symbol]: {
-            ...existingQuote,
-            price: update.price,
-            change: update.change,
-            changePercent: update.changePercent,
-            volume: update.volume,
-            lastUpdated: update.timestamp,
-          },
-        },
-        lastUpdated: update.timestamp,
-      };
-    });
+  removeFromWatchlist: (symbol: string) => {
+    set((state) => ({
+      watchlist: state.watchlist.filter(s => s !== symbol),
+    }));
   },
 
-  setLoading: (loading) => {
-    set({ isLoading: loading });
+  updateQuote: (symbol: string, quote: Partial<Quote>) => {
+    set((state) => ({
+      quotes: {
+        ...state.quotes,
+        [symbol]: { ...state.quotes[symbol], ...quote } as Quote,
+      },
+    }));
   },
 
-  setError: (error) => {
-    set({ error });
-  },
+  clearError: () => set({ error: null }),
 
-  clearError: () => {
-    set({ error: null });
-  },
-
-  reset: () => {
-    set({
-      quotes: {},
-      overview: null,
-      watchlist: [],
-      isLoading: false,
-      error: null,
-      lastUpdated: null,
-    });
-  },
+  reset: () => set({
+    quotes: {},
+    indices: [],
+    gainers: [],
+    losers: [],
+    marketStatus: null,
+    isLoading: false,
+    error: null,
+  }),
 }));

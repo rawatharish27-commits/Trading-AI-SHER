@@ -1,5 +1,6 @@
 """
 Schemas Package
+Pydantic models for API validation
 """
 
 from app.schemas.user import (
@@ -15,17 +16,38 @@ from app.schemas.user import (
     UserListResponse,
 )
 from app.schemas.signal import (
-    SignalTargets,
+    SignalAction,
+    SignalDirection,
+    SignalStatus,
+    ConfidenceLevel,
+    RiskLevel,
+    MarketRegime,
     SignalBase,
     SignalCreate,
+    SignalUpdate,
     SignalResponse,
     SignalListResponse,
+    SignalStatsResponse,
     SignalFilter,
-    SignalStats,
+    OrderSide,
+    OrderType,
+    OrderStatus,
+    ProductType,
+    OrderCreate,
+    OrderResponse,
+    OrderListResponse,
+    PositionSide,
+    PositionStatus,
+    PositionResponse,
+    PositionListResponse,
+    PortfolioResponse,
+    PortfolioStatsResponse,
+    QuoteResponse,
+    OHLCVResponse,
 )
 
 __all__ = [
-    # User schemas
+    # User
     "UserBase",
     "UserCreate",
     "UserUpdate",
@@ -36,12 +58,37 @@ __all__ = [
     "TokenPayload",
     "PasswordChange",
     "UserListResponse",
-    # Signal schemas
-    "SignalTargets",
+    # Signal
+    "SignalAction",
+    "SignalDirection",
+    "SignalStatus",
+    "ConfidenceLevel",
+    "RiskLevel",
+    "MarketRegime",
     "SignalBase",
     "SignalCreate",
+    "SignalUpdate",
     "SignalResponse",
     "SignalListResponse",
+    "SignalStatsResponse",
     "SignalFilter",
-    "SignalStats",
+    # Order
+    "OrderSide",
+    "OrderType",
+    "OrderStatus",
+    "ProductType",
+    "OrderCreate",
+    "OrderResponse",
+    "OrderListResponse",
+    # Position
+    "PositionSide",
+    "PositionStatus",
+    "PositionResponse",
+    "PositionListResponse",
+    # Portfolio
+    "PortfolioResponse",
+    "PortfolioStatsResponse",
+    # Market
+    "QuoteResponse",
+    "OHLCVResponse",
 ]

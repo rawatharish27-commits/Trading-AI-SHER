@@ -18,7 +18,7 @@ from loguru import logger
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from app.core import settings, init_db, close_db
-from app.api.v1.endpoints import auth, signals, orders, portfolio, market
+from app.api.v1.endpoints import auth, signals, orders, portfolio, market, health
 from app.websocket import router as ws_router
 from app.middleware import RateLimitMiddleware, RequestLoggingMiddleware, CORSSecurityMiddleware
 from app.exceptions import register_exception_handlers
@@ -163,6 +163,12 @@ app.include_router(
 app.include_router(
     ws_router,
     tags=["🔌 WebSocket"]
+)
+
+# Health Endpoints
+app.include_router(
+    health.router,
+    tags=["🏥 Health"]
 )
 
 

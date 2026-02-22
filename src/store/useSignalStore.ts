@@ -1,133 +1,131 @@
-import { create } from 'zustand';
-import { Signal, SignalDetail, SignalFilters } from '@/types/signal';
-import { signalsApi } from '@/lib/signals';
+"use client";
 
-interface SignalStore {
+import { create } from 'zustand';
+import { Signal, SignalFilter, SignalStatsResponse } from '@/lib/signals-api';
+import { signalsApi } from '@/lib/signals-api';
+
+interface SignalState {
   signals: Signal[];
-  selectedSignal: SignalDetail | null;
-  filters: SignalFilters;
+  activeSignals: Signal[];
+  stats: SignalStatsResponse | null;
+  selectedSignal: Signal | null;
   isLoading: boolean;
   error: string | null;
-  totalCount: number;
-  activeCount: number;
-
+  filters: SignalFilter;
+  
   // Actions
-  fetchSignals: (filters?: SignalFilters) => Promise<void>;
-  fetchSignal: (id: string) => Promise<void>;
-  setFilters: (filters: Partial<SignalFilters>) => void;
-  clearFilters: () => void;
-  setActiveCount: (count: number) => void;
-  addSignal: (signal: Signal) => void;
-  updateSignal: (id: string, updates: Partial<Signal>) => void;
-  removeSignal: (id: string) => void;
-  setLoading: (loading: boolean) => void;
-  setError: (error: string | null) => void;
+  fetchSignals: (filters?: SignalFilter) => Promise<void>;
+  fetchActiveSignals: () => Promise<void>;
+  fetchStats: () => Promise<void>;
+  selectSignal: (signal: Signal | null) => void;
+  generateSignal: (symbol: string) => Promise<Signal>;
+  cancelSignal: (id: number) => Promise<void>;
+  setFilters: (filters: Partial<SignalFilter>) => void;
   clearError: () => void;
   reset: () => void;
 }
 
-const initialFilters: SignalFilters = {
+const initialFilters: SignalFilter = {
   page: 1,
-  limit: 20,
+  page_size: 20,
 };
 
-export const useSignalStore = create<SignalStore>((set, get) => ({
+export const useSignalStore = create<SignalState>((set, get) => ({
   signals: [],
+  activeSignals: [],
+  stats: null,
   selectedSignal: null,
-  filters: initialFilters,
   isLoading: false,
   error: null,
-  totalCount: 0,
-  activeCount: 0,
+  filters: initialFilters,
 
-  fetchSignals: async (filters?: SignalFilters) => {
+  fetchSignals: async (filters?: SignalFilter) => {
     set({ isLoading: true, error: null });
     try {
-      const mergedFilters = { ...get().filters, ...filters };
-      const response = await signalsApi.getSignals(mergedFilters);
-      set({
-        signals: response.data,
-        totalCount: response.pagination.total,
-        filters: mergedFilters,
-        isLoading: false,
+      const appliedFilters = { ...get().filters, ...filters };
+      const response = await signalsApi.getSignals(appliedFilters);
+      set({ 
+        signals: response.signals, 
+        filters: appliedFilters,
+        isLoading: false 
       });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to fetch signals';
-      set({ error: message, isLoading: false });
+    } catch (error: any) {
+      set({ 
+        error: error.message || 'Failed to fetch signals', 
+        isLoading: false 
+      });
     }
   },
 
-  fetchSignal: async (id: string) => {
+  fetchActiveSignals: async () => {
+    try {
+      const signals = await signalsApi.getActiveSignals();
+      set({ activeSignals: signals });
+    } catch (error: any) {
+      console.error('Failed to fetch active signals:', error);
+    }
+  },
+
+  fetchStats: async () => {
+    try {
+      const stats = await signalsApi.getStats();
+      set({ stats });
+    } catch (error: any) {
+      console.error('Failed to fetch signal stats:', error);
+    }
+  },
+
+  selectSignal: (signal) => set({ selectedSignal: signal }),
+
+  generateSignal: async (symbol: string) => {
     set({ isLoading: true, error: null });
     try {
-      const signal = await signalsApi.getSignal(id);
-      set({ selectedSignal: signal, isLoading: false });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to fetch signal';
-      set({ error: message, isLoading: false });
+      const signal = await signalsApi.generateSignal(symbol);
+      // Refresh active signals
+      get().fetchActiveSignals();
+      set({ isLoading: false });
+      return signal;
+    } catch (error: any) {
+      set({ 
+        error: error.message || 'Failed to generate signal', 
+        isLoading: false 
+      });
+      throw error;
     }
   },
 
-  setFilters: (newFilters) => {
-    set((state) => ({
-      filters: { ...state.filters, ...newFilters },
+  cancelSignal: async (id: number) => {
+    try {
+      await signalsApi.cancelSignal(id);
+      // Update local state
+      set((state) => ({
+        signals: state.signals.map(s => 
+          s.id === id ? { ...s, status: 'CANCELLED' as const } : s
+        ),
+        activeSignals: state.activeSignals.filter(s => s.id !== id),
+      }));
+    } catch (error: any) {
+      set({ error: error.message || 'Failed to cancel signal' });
+      throw error;
+    }
+  },
+
+  setFilters: (filters) => {
+    set((state) => ({ 
+      filters: { ...state.filters, ...filters } 
     }));
+    get().fetchSignals({ ...get().filters, ...filters });
   },
 
-  clearFilters: () => {
-    set({ filters: initialFilters });
-  },
+  clearError: () => set({ error: null }),
 
-  setActiveCount: (count) => {
-    set({ activeCount: count });
-  },
-
-  addSignal: (signal) => {
-    set((state) => ({
-      signals: [signal, ...state.signals],
-      totalCount: state.totalCount + 1,
-    }));
-  },
-
-  updateSignal: (id, updates) => {
-    set((state) => ({
-      signals: state.signals.map((s) => (s.id === id ? { ...s, ...updates } : s)),
-      selectedSignal:
-        state.selectedSignal?.id === id
-          ? { ...state.selectedSignal, ...updates }
-          : state.selectedSignal,
-    }));
-  },
-
-  removeSignal: (id) => {
-    set((state) => ({
-      signals: state.signals.filter((s) => s.id !== id),
-      totalCount: state.totalCount - 1,
-      selectedSignal: state.selectedSignal?.id === id ? null : state.selectedSignal,
-    }));
-  },
-
-  setLoading: (loading) => {
-    set({ isLoading: loading });
-  },
-
-  setError: (error) => {
-    set({ error });
-  },
-
-  clearError: () => {
-    set({ error: null });
-  },
-
-  reset: () => {
-    set({
-      signals: [],
-      selectedSignal: null,
-      filters: initialFilters,
-      isLoading: false,
-      error: null,
-      totalCount: 0,
-      activeCount: 0,
-    });
-  },
+  reset: () => set({
+    signals: [],
+    activeSignals: [],
+    stats: null,
+    selectedSignal: null,
+    isLoading: false,
+    error: null,
+    filters: initialFilters,
+  }),
 }));
