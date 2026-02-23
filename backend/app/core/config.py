@@ -37,7 +37,8 @@ class Settings(BaseSettings):
     workers: int = 4
 
     # Database
-    database_url: str = "sqlite+aiosqlite:///./sher.db"
+    database_url: str = "postgresql+asyncpg://trading_user:trading_password@localhost:5432/trading_engine"
+    timescale_url: str = "postgresql+asyncpg://trading_user:trading_password@localhost:5433/trading_engine"
 
     # Security
     secret_key: str = "your-super-secret-key-change-in-production"
@@ -73,6 +74,35 @@ class Settings(BaseSettings):
     # External APIs
     gemini_api_key: str = ""
 
+    # SMC Configuration
+    # Timeframe Settings
+    smc_ltf_timeframe: str = "15m"  # Lower timeframe for entry
+    smc_htf_timeframe: str = "1h"   # Higher timeframe for bias
+
+    # Quality Thresholds
+    smc_min_quality_score: float = 0.6  # Minimum quality score for signals
+    smc_min_confidence: float = 0.7     # Minimum confidence level
+
+    # Risk Parameters
+    smc_min_rr_ratio: float = 1.5       # Minimum risk-reward ratio
+    smc_max_risk_per_trade: float = 0.01  # Maximum risk per trade (1%)
+    smc_max_daily_signals: int = 3      # Maximum signals per day
+
+    # SMC Component Weights (for quality scoring)
+    smc_market_structure_weight: float = 0.3
+    smc_liquidity_weight: float = 0.25
+    smc_order_block_weight: float = 0.25
+    smc_fvg_weight: float = 0.15
+    smc_mtf_weight: float = 0.05
+
+    # Symbol-specific SMC parameters (JSON string)
+    smc_symbol_configs: str = '{"default": {"ltf_timeframe": "15m", "htf_timeframe": "1h", "min_quality": 0.6}}'
+
+    # Environment-specific SMC settings
+    smc_production_mode: bool = False
+    smc_backtest_mode: bool = False
+    smc_debug_logging: bool = False
+
     # CORS
     cors_origins: str = '["http://localhost:3000","http://localhost:5173"]'
 
@@ -84,6 +114,32 @@ class Settings(BaseSettings):
             return json.loads(self.cors_origins)
         except:
             return ["http://localhost:3000"]
+
+    @property
+    def smc_symbol_configs_dict(self) -> dict:
+        """Parse SMC symbol configurations from JSON string"""
+        import json
+        try:
+            return json.loads(self.smc_symbol_configs)
+        except:
+            return {"default": {"ltf_timeframe": "15m", "htf_timeframe": "1h", "min_quality": 0.6}}
+
+    def get_smc_config_for_symbol(self, symbol: str) -> dict:
+        """Get SMC configuration for a specific symbol"""
+        configs = self.smc_symbol_configs_dict
+        return configs.get(symbol, configs.get("default", {}))
+
+    def is_smc_enabled_for_symbol(self, symbol: str) -> bool:
+        """Check if SMC is enabled for a symbol"""
+        config = self.get_smc_config_for_symbol(symbol)
+        return config.get("enabled", True)
+
+    def get_smc_timeframes_for_symbol(self, symbol: str) -> tuple[str, str]:
+        """Get LTF and HTF timeframes for a symbol"""
+        config = self.get_smc_config_for_symbol(symbol)
+        ltf = config.get("ltf_timeframe", self.smc_ltf_timeframe)
+        htf = config.get("htf_timeframe", self.smc_htf_timeframe)
+        return ltf, htf
 
 
 @lru_cache

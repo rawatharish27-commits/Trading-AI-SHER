@@ -289,6 +289,152 @@ class MarketDataStreamer:
                 await asyncio.sleep(5)
 
 
+@dataclass
+class SignalSubscription:
+    """Signal subscription details"""
+    client_id: str
+    symbols: Set[str]
+    strategies: Set[str]  # "SMC", "PROBABILITY", etc.
+    min_quality: float = 0.0
+
+
+class SignalManager:
+    """
+    Signal Streaming Manager
+
+    Manages:
+    - Signal subscriptions
+    - Real-time signal broadcasting
+    - Signal monitoring and cleanup
+    """
+
+    def __init__(self):
+        self.signal_connections: Dict[str, WebSocket] = {}
+        self.signal_subscriptions: Dict[str, SignalSubscription] = {}
+        self.symbol_signal_subscribers: Dict[str, Set[str]] = {}  # symbol -> client_ids
+
+        logger.info("📡 Signal Manager initialized")
+
+    async def connect_signals(self, websocket: WebSocket, client_id: str) -> None:
+        """Accept new signal WebSocket connection"""
+        await websocket.accept()
+        self.signal_connections[client_id] = websocket
+        self.signal_subscriptions[client_id] = SignalSubscription(
+            client_id=client_id,
+            symbols=set(),
+            strategies={"SMC"}  # Default to SMC
+        )
+        logger.info(f"📡 Signal client connected: {client_id}")
+
+    def disconnect_signals(self, client_id: str) -> None:
+        """Handle signal client disconnection"""
+        if client_id in self.signal_connections:
+            del self.signal_connections[client_id]
+
+        if client_id in self.signal_subscriptions:
+            # Remove from symbol subscribers
+            for symbol in self.signal_subscriptions[client_id].symbols:
+                if symbol in self.symbol_signal_subscribers:
+                    self.symbol_signal_subscribers[symbol].discard(client_id)
+
+            del self.signal_subscriptions[client_id]
+
+        logger.info(f"📡 Signal client disconnected: {client_id}")
+
+    async def subscribe_signals(
+        self,
+        client_id: str,
+        symbols: List[str],
+        strategies: Optional[List[str]] = None,
+        min_quality: float = 0.0
+    ) -> None:
+        """Subscribe client to signals"""
+        if client_id not in self.signal_subscriptions:
+            return
+
+        subscription = self.signal_subscriptions[client_id]
+        subscription.symbols.update(symbols)
+        subscription.min_quality = min_quality
+
+        if strategies:
+            subscription.strategies.update(strategies)
+
+        for symbol in symbols:
+            if symbol not in self.symbol_signal_subscribers:
+                self.symbol_signal_subscribers[symbol] = set()
+            self.symbol_signal_subscribers[symbol].add(client_id)
+
+        logger.info(f"📡 Client {client_id} subscribed to signals: {symbols}")
+
+    async def unsubscribe_signals(self, client_id: str, symbols: List[str]) -> None:
+        """Unsubscribe client from signals"""
+        if client_id not in self.signal_subscriptions:
+            return
+
+        subscription = self.signal_subscriptions[client_id]
+
+        for symbol in symbols:
+            subscription.symbols.discard(symbol)
+
+            if symbol in self.symbol_signal_subscribers:
+                self.symbol_signal_subscribers[symbol].discard(client_id)
+
+        logger.info(f"📡 Client {client_id} unsubscribed from signals: {symbols}")
+
+    async def broadcast_signal(self, signal_data: Dict) -> None:
+        """Broadcast signal to subscribed clients"""
+        symbol = signal_data.get("symbol", "")
+        strategy = signal_data.get("strategy", "SMC")
+        quality_score = signal_data.get("quality_score", 0.0)
+
+        if symbol not in self.symbol_signal_subscribers:
+            return
+
+        message = {
+            "type": "signal",
+            "data": signal_data,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+
+        disconnected: List[str] = []
+
+        for client_id in self.symbol_signal_subscribers[symbol]:
+            if client_id in self.signal_subscriptions:
+                subscription = self.signal_subscriptions[client_id]
+
+                # Check filters
+                if strategy not in subscription.strategies:
+                    continue
+                if quality_score < subscription.min_quality:
+                    continue
+
+                # Send to client
+                if client_id in self.signal_connections:
+                    try:
+                        await self.signal_connections[client_id].send_json(message)
+                    except Exception as e:
+                        logger.warning(f"Failed to send signal to {client_id}: {e}")
+                        disconnected.append(client_id)
+
+        # Clean up disconnected clients
+        for client_id in disconnected:
+            self.disconnect_signals(client_id)
+
+    async def send_to_signal_client(self, client_id: str, message: Dict) -> bool:
+        """Send message to specific signal client"""
+        if client_id not in self.signal_connections:
+            return False
+
+        try:
+            await self.signal_connections[client_id].send_json(message)
+            return True
+        except Exception as e:
+            logger.warning(f"Failed to send to signal client {client_id}: {e}")
+            self.disconnect_signals(client_id)
+            return False
+
+
 # Singleton instances
 connection_manager = ConnectionManager()
 market_streamer = MarketDataStreamer(connection_manager)
+signal_manager = SignalManager()

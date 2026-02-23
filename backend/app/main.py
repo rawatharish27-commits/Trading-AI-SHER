@@ -18,7 +18,8 @@ from loguru import logger
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from app.core import settings, init_db, close_db
-from app.api.v1.endpoints import auth, signals, orders, portfolio, market, health
+from app.core.metrics import MetricsMiddleware, get_metrics_response, MetricsCollector
+from app.api.v1.endpoints import auth, signals, signals_smc, orders, portfolio, market, health
 from app.websocket import router as ws_router
 from app.middleware import RateLimitMiddleware, RequestLoggingMiddleware, CORSSecurityMiddleware
 from app.exceptions import register_exception_handlers
@@ -138,6 +139,13 @@ app.include_router(
     tags=["📊 AI Signals"]
 )
 
+# SMC Signals
+app.include_router(
+    signals_smc.router,
+    prefix="/api/v1/signals/smc",
+    tags=["🎯 SMC Signals"]
+)
+
 # Orders
 app.include_router(
     orders.router,
@@ -221,6 +229,7 @@ async def root():
         "endpoints": {
             "auth": "/api/v1/auth",
             "signals": "/api/v1/signals",
+            "smc_signals": "/api/v1/signals/smc",
             "orders": "/api/v1/orders",
             "portfolio": "/api/v1/portfolio",
             "market": "/api/v1/market",
@@ -234,20 +243,11 @@ async def root():
 @app.get("/metrics", tags=["📊 Metrics"])
 async def metrics():
     """Prometheus-compatible metrics endpoint"""
-    task_stats = {
-        "pending": len(task_scheduler.get_pending_tasks()),
-        "running": len(task_scheduler.get_running_tasks()),
-        "completed": len(task_scheduler.get_completed_tasks()),
-        "failed": len(task_scheduler.get_failed_tasks()),
-    }
-    
-    return {
-        "app_info": {
-            "name": settings.app_name,
-            "version": settings.app_version,
-        },
-        "task_scheduler": task_stats,
-    }
+    # Update system metrics
+    MetricsCollector.update_system_metrics()
+    MetricsCollector.update_business_metrics()
+
+    return get_metrics_response()
 
 
 # ===== ENTRY POINT =====

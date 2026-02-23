@@ -13,6 +13,7 @@ from loguru import logger
 from app.websocket.manager import (
     connection_manager,
     market_streamer,
+    signal_manager,
     SubscriptionMode,
 )
 
@@ -134,23 +135,117 @@ async def websocket_market(websocket: WebSocket):
 async def websocket_signals(websocket: WebSocket):
     """
     Signal Stream WebSocket Endpoint
-    
-    Receives real-time AI signals
+
+    Protocol:
+    1. Connect: Client receives connection acknowledgment
+    2. Subscribe: {"action": "subscribe", "symbols": ["RELIANCE", "TCS"], "strategies": ["SMC"], "min_quality": 0.6}
+    3. Unsubscribe: {"action": "unsubscribe", "symbols": ["RELIANCE"]}
+    4. Set Filters: {"action": "set_filters", "strategies": ["SMC"], "min_quality": 0.7}
+    5. Receive: Real-time SMC signal updates
     """
+    # Generate unique client ID
     client_id = str(uuid.uuid4())[:8]
-    
-    await websocket.accept()
-    
+
+    await signal_manager.connect_signals(websocket, client_id)
+
     try:
-        await websocket.send_json({
+        # Send connection acknowledgment
+        await signal_manager.send_to_signal_client(client_id, {
             "type": "connected",
             "client_id": client_id,
-            "message": "Connected to signal stream"
+            "message": "Connected to SMC signal stream"
         })
-        
+
+        # Message loop
         while True:
             data = await websocket.receive_text()
-            # Handle signal subscription
-            
+
+            try:
+                message = json.loads(data)
+                action = message.get("action", "")
+
+                if action == "subscribe":
+                    symbols = message.get("symbols", [])
+                    strategies = message.get("strategies", ["SMC"])
+                    min_quality = message.get("min_quality", 0.0)
+
+                    await signal_manager.subscribe_signals(
+                        client_id,
+                        symbols,
+                        strategies,
+                        min_quality
+                    )
+
+                    await signal_manager.send_to_signal_client(client_id, {
+                        "type": "subscribed",
+                        "symbols": list(signal_manager.signal_subscriptions[client_id].symbols),
+                        "strategies": list(signal_manager.signal_subscriptions[client_id].strategies),
+                        "min_quality": signal_manager.signal_subscriptions[client_id].min_quality
+                    })
+
+                elif action == "unsubscribe":
+                    symbols = message.get("symbols", [])
+                    await signal_manager.unsubscribe_signals(client_id, symbols)
+
+                    await signal_manager.send_to_signal_client(client_id, {
+                        "type": "unsubscribed",
+                        "symbols": symbols
+                    })
+
+                elif action == "set_filters":
+                    strategies = message.get("strategies", ["SMC"])
+                    min_quality = message.get("min_quality", 0.0)
+
+                    if client_id in signal_manager.signal_subscriptions:
+                        subscription = signal_manager.signal_subscriptions[client_id]
+                        subscription.strategies = set(strategies)
+                        subscription.min_quality = min_quality
+
+                    await signal_manager.send_to_signal_client(client_id, {
+                        "type": "filters_updated",
+                        "strategies": strategies,
+                        "min_quality": min_quality
+                    })
+
+                elif action == "ping":
+                    await signal_manager.send_to_signal_client(client_id, {
+                        "type": "pong",
+                        "timestamp": str(uuid.uuid4())
+                    })
+
+                elif action == "get_subscriptions":
+                    if client_id in signal_manager.signal_subscriptions:
+                        subscription = signal_manager.signal_subscriptions[client_id]
+                        await signal_manager.send_to_signal_client(client_id, {
+                            "type": "subscriptions",
+                            "symbols": list(subscription.symbols),
+                            "strategies": list(subscription.strategies),
+                            "min_quality": subscription.min_quality
+                        })
+
+                else:
+                    await signal_manager.send_to_signal_client(client_id, {
+                        "type": "error",
+                        "message": f"Unknown action: {action}"
+                    })
+
+            except json.JSONDecodeError:
+                await signal_manager.send_to_signal_client(client_id, {
+                    "type": "error",
+                    "message": "Invalid JSON format"
+                })
+
+            except Exception as e:
+                logger.error(f"Signal WebSocket message error: {e}")
+                await signal_manager.send_to_signal_client(client_id, {
+                    "type": "error",
+                    "message": str(e)
+                })
+
     except WebSocketDisconnect:
+        signal_manager.disconnect_signals(client_id)
         logger.info(f"Signal client {client_id} disconnected")
+
+    except Exception as e:
+        logger.error(f"Signal WebSocket error: {e}")
+        signal_manager.disconnect_signals(client_id)

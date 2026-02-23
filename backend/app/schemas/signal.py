@@ -120,6 +120,25 @@ class SignalResponse(SignalBase):
     created_at: datetime
     updated_at: datetime
 
+    # SMC Components (for SMC-based signals)
+    market_structure: Optional[str] = None
+    liquidity_sweep: Optional[Dict[str, Any]] = None
+    order_block: Optional[Dict[str, Any]] = None
+    fair_value_gap: Optional[Dict[str, Any]] = None
+    mtf_confirmation: Optional[bool] = None
+
+    # Signal Versioning
+    setup_version: Optional[str] = None
+
+    # Performance Tracking
+    exit_price: Optional[float] = None
+    realized_pnl: Optional[float] = None
+    pnl_percentage: Optional[float] = None
+    holding_period_days: Optional[int] = None
+    max_favorable_excursion: Optional[float] = None
+    max_adverse_excursion: Optional[float] = None
+    performance_score: Optional[float] = None
+
     model_config = {"from_attributes": True}
 
     @property
@@ -381,3 +400,156 @@ class OHLCVResponse(BaseModel):
     symbol: str
     interval: str
     data: List[Dict[str, Any]]
+
+
+# SMC-Specific Schemas
+class MarketStructure(str, Enum):
+    """Market structure types"""
+    BULLISH = "BULLISH"
+    BEARISH = "BEARISH"
+    SIDEWAYS = "SIDEWAYS"
+
+
+class LiquidityType(str, Enum):
+    """Liquidity types"""
+    EQUAL_HIGH = "EQUAL_HIGH"
+    EQUAL_LOW = "EQUAL_LOW"
+    SWEEP = "SWEEP"
+    STOP_HUNT = "STOP_HUNT"
+
+
+class SMCLiquidityZone(BaseModel):
+    """SMC Liquidity Zone"""
+    price_level: float
+    zone_type: LiquidityType
+    strength: float = Field(..., ge=0, le=1)
+    wick_count: int
+    volume_sum: int
+    timestamp: datetime
+
+
+class SMCOrderBlock(BaseModel):
+    """SMC Order Block"""
+    price_level: float
+    direction: str
+    strength: float = Field(..., ge=0, le=1)
+    is_mitigated: bool
+    timestamp: datetime
+
+
+class SMCFairValueGap(BaseModel):
+    """SMC Fair Value Gap"""
+    top: float
+    bottom: float
+    midpoint: float
+    direction: str
+    size: float
+    is_filled: bool
+    timestamp: datetime
+
+
+class SMCSignalCreate(SignalBase):
+    """Schema for creating SMC signal"""
+    action: SignalAction
+    direction: SignalDirection
+    entry_price: float = Field(..., gt=0)
+    stop_loss: float = Field(..., gt=0)
+    target_price: float = Field(..., gt=0)
+    risk_reward_ratio: float = Field(..., gt=0)
+    quality_score: float = Field(..., ge=0, le=1)
+    confidence: str = Field(..., pattern="^(LOW|MEDIUM|HIGH)$")
+
+    # SMC Components
+    market_structure: MarketStructure
+    liquidity_sweep: Optional[SMCLiquidityZone] = None
+    order_block: Optional[SMCOrderBlock] = None
+    fvg: Optional[SMCFairValueGap] = None
+    mtf_confirmation: bool = False
+
+    strategy: str = Field(default="SMC")
+    reasoning: Optional[str] = None
+
+
+class SMCSignalResponse(SignalBase):
+    """Schema for SMC signal response"""
+    trace_id: str
+    action: SignalAction
+    direction: SignalDirection
+    quality_score: float
+    confidence: str
+    risk_level: str
+    approved: bool
+
+    # SMC Components
+    market_structure: MarketStructure
+    liquidity_sweep: Optional[SMCLiquidityZone] = None
+    order_block: Optional[SMCOrderBlock] = None
+    fvg: Optional[SMCFairValueGap] = None
+    mtf_confirmation: bool
+
+    # Price Levels
+    entry_price: float
+    stop_loss: float
+    target_price: float
+    risk_reward_ratio: float
+    risk_amount: float
+    reward_amount: float
+
+    # Metadata
+    signal_time: datetime
+    setup_timestamp: datetime
+    risk_reasons: List[str]
+
+    model_config = {"from_attributes": True}
+
+
+class SMCSignalGenerateRequest(BaseModel):
+    """Request schema for SMC signal generation"""
+    symbol: str = Field(..., max_length=50)
+    exchange: str = Field(default="NSE", max_length=20)
+    ltf_timeframe: str = Field(default="15m", pattern="^(1m|5m|15m|1h|1d)$")
+    htf_timeframe: str = Field(default="1h", pattern="^(1m|5m|15m|1h|1d)$")
+
+
+class SMCSignalGenerateResponse(BaseModel):
+    """Response schema for SMC signal generation"""
+    signal: Optional[SMCSignalResponse] = None
+    message: str
+    trace_id: str
+
+
+# SMC Analytics Schemas
+class SMCPerformanceMetrics(BaseModel):
+    """SMC performance metrics"""
+    total_signals: int
+    active_signals: int
+    completed_signals: int
+    win_rate: float
+    avg_win_rate: float
+    avg_loss_rate: float
+    profit_factor: float
+    avg_rr_ratio: float
+    avg_holding_period_days: float
+    best_setup_type: str
+    worst_setup_type: str
+
+
+class SMCSetupPerformance(BaseModel):
+    """Performance by SMC setup type"""
+    setup_type: str
+    total_signals: int
+    win_count: int
+    loss_count: int
+    win_rate: float
+    avg_pnl: float
+    avg_rr_ratio: float
+    avg_holding_period: float
+
+
+class SMCAnalyticsResponse(BaseModel):
+    """Complete SMC analytics response"""
+    performance_metrics: SMCPerformanceMetrics
+    setup_performance: List[SMCSetupPerformance]
+    timeframe_performance: Dict[str, float]
+    symbol_performance: Dict[str, float]
+    monthly_performance: Dict[str, Dict[str, float]]

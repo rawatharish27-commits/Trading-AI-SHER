@@ -128,6 +128,25 @@ class Signal(Base):
     # Strategy Information
     strategy: Mapped[str] = mapped_column(String(100), default="ensemble")
 
+    # SMC Components (for SMC-based signals)
+    market_structure: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    liquidity_sweep: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON, nullable=True)
+    order_block: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON, nullable=True)
+    fair_value_gap: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON, nullable=True)
+    mtf_confirmation: Mapped[Optional[bool]] = mapped_column(Boolean, default=False)
+
+    # Signal Versioning
+    setup_version: Mapped[Optional[str]] = mapped_column(String(20), default="1.0", nullable=True)
+
+    # Performance Tracking
+    exit_price: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    realized_pnl: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    pnl_percentage: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    holding_period_days: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    max_favorable_excursion: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    max_adverse_excursion: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    performance_score: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+
     # Evidence & Reasoning
     evidence_count: Mapped[int] = mapped_column(Integer, default=0)
     evidence_list: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON, nullable=True)
