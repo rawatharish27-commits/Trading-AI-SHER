@@ -708,7 +708,8 @@ class SMCEngine:
             wick_ratio = wick_size / total_range
             return wick_ratio > 0.6  # Wick > 60% of total range
 
-        except:
+        except Exception as e:
+            logger.warning(f"Failed to check large wick: {e}")
             return False
 
     def _check_mitigation(self, df: pd.DataFrame, price_level: float, start_idx: int, end_idx: int) -> bool:
@@ -723,7 +724,8 @@ class SMCEngine:
 
             return touched_high and touched_low
 
-        except:
+        except Exception as e:
+            logger.warning(f"Failed to check mitigation: {e}")
             return False
 
     def _calculate_atr_simple(self, df: pd.DataFrame, period: int = 14) -> float:
@@ -747,7 +749,8 @@ class SMCEngine:
 
             return np.mean(tr_values[-period:]) if tr_values else 0
 
-        except:
+        except Exception as e:
+            logger.warning(f"Failed to calculate ATR: {e}")
             return 0
 
     def _analyze_multi_timeframe_bias(self, symbol: str, ltf_data: pd.DataFrame,

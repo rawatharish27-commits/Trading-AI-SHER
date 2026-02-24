@@ -17,11 +17,15 @@ from loguru import logger
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+# Setup structured logging
+setup_logging()
+
 from app.core import settings, init_db, close_db
+from app.core.logging import setup_logging
 from app.core.metrics import MetricsMiddleware, get_metrics_response, MetricsCollector
 from app.api.v1.endpoints import auth, signals, signals_smc, orders, portfolio, market, health
 from app.websocket import router as ws_router
-from app.middleware import RateLimitMiddleware, RequestLoggingMiddleware, CORSSecurityMiddleware
+from app.middleware import RateLimitMiddleware, RequestLoggingMiddleware, CORSSecurityMiddleware, APIVersionMiddleware
 from app.exceptions import register_exception_handlers
 from app.tasks import task_scheduler
 
@@ -40,13 +44,150 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
     # Start task scheduler
     await task_scheduler.start()
     logger.info("✅ Task scheduler started")
-    
+
+    # Start database performance monitoring
+    from app.services.database_performance_service import start_database_monitoring
+    await start_database_monitoring()
+    logger.info("✅ Database performance monitoring started")
+
+    # Perform database health checks
+    from app.core.database import check_db_health, validate_connection_pool
+    logger.info("🔍 Performing database health checks...")
+    health_check = await check_db_health()
+    if health_check["status"] != "healthy":
+        logger.error(f"❌ Database health check failed: {health_check}")
+        raise Exception(f"Database health check failed: {health_check.get('error', 'Unknown error')}")
+
+    pool_validation = await validate_connection_pool()
+    if not pool_validation.get("pool_config_valid", False):
+        logger.error(f"❌ Database pool validation failed: {pool_validation}")
+        raise Exception("Database connection pool validation failed")
+
+    logger.info("✅ Database health checks passed")
+
+    # Analyze database indexing strategy
+    from app.services.database_indexing_service import get_index_maintenance_report
+    logger.info("🔍 Analyzing database indexing strategy...")
+    index_report = await get_index_maintenance_report()
+    critical_missing = sum(table_data.get("critical_missing", 0) for table_data in index_report["tables"].values())
+
+    if critical_missing > 0:
+        logger.warning(f"⚠️ Found {critical_missing} critical missing indexes. Consider running index optimization.")
+        # Don't fail startup for missing indexes, just warn
+    else:
+        logger.info("✅ Database indexing analysis completed")
+
     # Schedule periodic tasks
     task_scheduler.submit(
         task_scheduler._scheduler_loop,
         name="scheduler_maintenance",
         delay_seconds=0
     )
+
+    # Schedule automated backups (daily at 2 AM)
+    from datetime import datetime, time, timedelta
+    import asyncio
+
+    async def schedule_daily_backups():
+        """Schedule daily automated backups"""
+        while True:
+            now = datetime.utcnow()
+            # Next 2 AM
+            next_backup = now.replace(hour=2, minute=0, second=0, microsecond=0)
+            if now >= next_backup:
+                next_backup = next_backup.replace(day=next_backup.day + 1)
+
+            delay = (next_backup - now).total_seconds()
+            logger.info(f"📅 Next automated backup scheduled in {delay:.0f} seconds")
+
+            await asyncio.sleep(delay)
+
+            # Submit backup task
+            task_scheduler.submit(
+                automated_database_backup,
+                name="daily_backup",
+                max_retries=3
+            )
+
+            # Wait a bit before rescheduling
+            await asyncio.sleep(60)
+
+    # Start backup scheduler
+    asyncio.create_task(schedule_daily_backups())
+    logger.info("✅ Automated backup scheduler started")
+
+    # Schedule backup cleanup (weekly on Sunday at 3 AM)
+    async def schedule_weekly_cleanup():
+        """Schedule weekly backup cleanup"""
+        while True:
+            now = datetime.utcnow()
+            # Next Sunday 3 AM
+            days_until_sunday = (6 - now.weekday()) % 7
+            if days_until_sunday == 0 and now.hour >= 3:
+                days_until_sunday = 7
+
+            next_cleanup = now.replace(hour=3, minute=0, second=0, microsecond=0) + timedelta(days=days_until_sunday)
+            if days_until_sunday == 0 and now.hour >= 3:
+                next_cleanup = next_cleanup.replace(day=next_cleanup.day + 7)
+
+            delay = (next_cleanup - now).total_seconds()
+            logger.info(f"📅 Next backup cleanup scheduled in {delay:.0f} seconds")
+
+            await asyncio.sleep(delay)
+
+            # Submit cleanup task
+            task_scheduler.submit(
+                cleanup_old_backups,
+                name="weekly_cleanup",
+                max_retries=3
+            )
+
+            # Wait a bit before rescheduling
+            await asyncio.sleep(60)
+
+    # Start cleanup scheduler
+    asyncio.create_task(schedule_weekly_cleanup())
+    logger.info("✅ Backup cleanup scheduler started")
+
+    # Schedule data retention cleanup (monthly on 1st at 4 AM)
+    async def schedule_monthly_retention():
+        """Schedule monthly data retention cleanup"""
+        while True:
+            now = datetime.utcnow()
+            # Next 1st of month 4 AM
+            if now.month == 12:
+                next_month = 1
+                next_year = now.year + 1
+            else:
+                next_month = now.month + 1
+                next_year = now.year
+
+            next_cleanup = now.replace(year=next_year, month=next_month, day=1, hour=4, minute=0, second=0, microsecond=0)
+            if next_cleanup <= now:
+                # If we're already past the 1st, schedule for next month
+                if next_month == 12:
+                    next_cleanup = next_cleanup.replace(year=next_year + 1, month=1)
+                else:
+                    next_cleanup = next_cleanup.replace(month=next_month + 1)
+
+            delay = (next_cleanup - now).total_seconds()
+            logger.info(f"📅 Next data retention cleanup scheduled in {delay:.0f} seconds")
+
+            await asyncio.sleep(delay)
+
+            # Submit retention cleanup task
+            task_scheduler.submit(
+                data_retention_cleanup,
+                name="monthly_retention",
+                max_retries=3
+            )
+
+            # Wait a bit before rescheduling
+            await asyncio.sleep(60)
+
+    # Start retention cleanup scheduler
+    asyncio.create_task(schedule_monthly_retention())
+    logger.info("✅ Data retention cleanup scheduler started")
     
     logger.info(f"🎉 {settings.app_name} started successfully!")
     
@@ -102,6 +243,15 @@ app = FastAPI(
 
 # ===== MIDDLEWARE =====
 
+# HTTPS Enforcement (Production only)
+if settings.environment == "production":
+    from app.core.security import HTTPSRedirectMiddleware
+    app.add_middleware(HTTPSRedirectMiddleware)
+
+# Request Size Limits
+from app.core.security import RequestSizeLimitMiddleware
+app.add_middleware(RequestSizeLimitMiddleware, max_request_size=10 * 1024 * 1024)  # 10MB
+
 # CORS
 app.add_middleware(
     CORSMiddleware,
@@ -119,6 +269,9 @@ app.add_middleware(RequestLoggingMiddleware)
 
 # Security Headers
 app.add_middleware(CORSSecurityMiddleware)
+
+# API Version Headers
+app.add_middleware(APIVersionMiddleware, current_version="v1", deprecated_versions=[])
 
 # ===== EXCEPTION HANDLERS =====
 register_exception_handlers(app)

@@ -7,6 +7,7 @@ import pytest
 import pandas as pd
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import text
 from unittest.mock import patch
 
 from app.models import Signal, User
@@ -172,7 +173,8 @@ class TestSMCIntegration:
 
         # Create a signal directly in database for testing
         user_result = await db_session.execute(
-            "SELECT id FROM users WHERE email = 'smc_list@example.com'"
+            text("SELECT id FROM users WHERE email = :email"),
+            {"email": "smc_list@example.com"}
         )
         user_id = user_result.scalar()
 
@@ -267,7 +269,8 @@ class TestSMCIntegration:
 
         # Create a signal directly in database
         user_result = await db_session.execute(
-            "SELECT id FROM users WHERE email = 'smc_cancel@example.com'"
+            text("SELECT id FROM users WHERE email = :email"),
+            {"email": "smc_cancel@example.com"}
         )
         user_id = user_result.scalar()
 
@@ -328,7 +331,8 @@ class TestSMCIntegration:
 
         # Create multiple signals
         user_result = await db_session.execute(
-            "SELECT id FROM users WHERE email = 'smc_filter@example.com'"
+            text("SELECT id FROM users WHERE email = :email"),
+            {"email": "smc_filter@example.com"}
         )
         user_id = user_result.scalar()
 
@@ -415,7 +419,8 @@ class TestSMCIntegration:
 
         # Create multiple signals
         user_result = await db_session.execute(
-            "SELECT id FROM users WHERE email = 'smc_pagination@example.com'"
+            text("SELECT id FROM users WHERE email = :email"),
+            {"email": "smc_pagination@example.com"}
         )
         user_id = user_result.scalar()
 

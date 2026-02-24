@@ -56,7 +56,7 @@
 │                                                                              │
 │  ┌──────────────────┐     ┌──────────────────┐     ┌──────────────────┐    │
 │  │    FRONTEND      │     │     BACKEND      │     │    DATABASE      │    │
-│  │   (Next.js 16)   │────▶│   (FastAPI)      │────▶│  (SQLite/PG)     │    │
+│  │   (Next.js 16)   │────▶│   (FastAPI)      │────▶│  (PostgreSQL)    │    │
 │  │                  │     │                  │     │                  │    │
 │  │  • React 19      │     │  • Python 3.11   │     │  • SQLAlchemy    │    │
 │  │  • TypeScript    │     │  • Async/Await   │     │  • Alembic       │    │

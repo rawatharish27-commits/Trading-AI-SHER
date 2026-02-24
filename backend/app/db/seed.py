@@ -9,6 +9,7 @@ from datetime import datetime, timedelta
 import random
 
 from sqlalchemy.ext.asyncio import AsyncSession
+from loguru import logger
 
 from app.core.database import async_session_maker
 from app.core.security import get_password_hash
@@ -153,8 +154,10 @@ class DatabaseSeeder:
 
     async def seed_portfolios(self) -> List[Portfolio]:
         """Seed portfolios for users"""
+        from sqlalchemy import text
         users = await self.session.execute(
-            "SELECT id FROM users WHERE role != 'ADMIN'"
+            text("SELECT id FROM users WHERE role != :admin_role"),
+            {"admin_role": "ADMIN"}
         )
         user_ids = [u[0] for u in users.fetchall()]
 
@@ -186,7 +189,11 @@ class DatabaseSeeder:
 
     async def seed_signals(self, count: int = 50) -> List[Signal]:
         """Seed trading signals"""
-        users = await self.session.execute("SELECT id FROM users LIMIT 3")
+        from sqlalchemy import text
+        users = await self.session.execute(
+            text("SELECT id FROM users LIMIT :limit_count"),
+            {"limit_count": 3}
+        )
         user_ids = [u[0] for u in users.fetchall()]
 
         symbols = [
@@ -230,10 +237,17 @@ class DatabaseSeeder:
 
     async def seed_orders(self, count: int = 30) -> List[Order]:
         """Seed orders"""
-        users = await self.session.execute("SELECT id FROM users LIMIT 3")
+        from sqlalchemy import text
+        users = await self.session.execute(
+            text("SELECT id FROM users LIMIT :limit_count"),
+            {"limit_count": 3}
+        )
         user_ids = [u[0] for u in users.fetchall()]
 
-        signals = await self.session.execute("SELECT id FROM signals LIMIT 20")
+        signals = await self.session.execute(
+            text("SELECT id FROM signals LIMIT :limit_count"),
+            {"limit_count": 20}
+        )
         signal_ids = [s[0] for s in signals.fetchall()]
 
         symbols = [
@@ -272,7 +286,11 @@ class DatabaseSeeder:
 
     async def seed_positions(self, count: int = 15) -> List[Position]:
         """Seed positions"""
-        users = await self.session.execute("SELECT id FROM users LIMIT 3")
+        from sqlalchemy import text
+        users = await self.session.execute(
+            text("SELECT id FROM users LIMIT :limit_count"),
+            {"limit_count": 3}
+        )
         user_ids = [u[0] for u in users.fetchall()]
 
         symbols = [
@@ -320,9 +338,9 @@ async def run_seed():
         results = await seeder.seed_all()
         await session.commit()
 
-        print("Database seeded successfully!")
+        logger.info("Database seeded successfully!")
         for key, value in results.items():
-            print(f"  - {key}: {len(value)} records")
+            logger.info(f"  - {key}: {len(value)} records")
 
 
 if __name__ == "__main__":

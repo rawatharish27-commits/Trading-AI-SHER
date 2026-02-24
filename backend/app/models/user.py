@@ -80,6 +80,8 @@ class User(Base):
     mfa_secret: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     last_login: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     last_password_change: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    failed_login_attempts: Mapped[int] = mapped_column(Integer, default=0)
+    locked_until: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Subscription
     plan_expiry: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)

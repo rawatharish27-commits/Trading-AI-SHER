@@ -4,6 +4,41 @@
 
 Trading AI SHER is a production-grade AI-powered trading system that generates SMC (Smart Money Concept) based trading signals using real market data from Angel One API.
 
+## API Versioning
+
+The Trading AI SHER API uses semantic versioning with the following format:
+
+- **Current Version**: v1 (stable)
+- **Version Header**: `X-API-Version: v1`
+- **Deprecation Notice**: Headers included for deprecated versions
+
+### Version Headers
+
+All API responses include version information:
+
+```
+X-API-Version: v1
+X-API-Current-Version: 4.5.0
+```
+
+### Deprecation Warnings
+
+When using deprecated API versions, additional headers are included:
+
+```
+X-API-Deprecated: true
+X-API-Deprecation-Message: API version v0 is deprecated. Please migrate to v1.
+X-API-Deprecation-Date: 2024-12-31
+X-API-Sunset: 2025-06-30
+```
+
+### Migration Guide
+
+#### From v0 to v1
+- Update endpoint paths from `/api/signals/` to `/api/v1/signals/`
+- Authentication now requires version-specific headers
+- Response format includes additional metadata fields
+
 ## Authentication
 
 All API endpoints require authentication using JWT tokens or API keys.

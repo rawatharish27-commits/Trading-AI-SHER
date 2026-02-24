@@ -121,19 +121,47 @@ async def login(
     # Find user
     result = await db.execute(select(User).where(User.email == credentials.email))
     user = result.scalar_one_or_none()
-    
-    if not user or not verify_password(credentials.password, user.hashed_password):
+
+    if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password"
         )
-    
+
+    # Check if account is locked
+    if user.locked_until and user.locked_until > datetime.utcnow():
+        remaining_time = int((user.locked_until - datetime.utcnow()).total_seconds() / 60)
+        raise HTTPException(
+            status_code=status.HTTP_423_LOCKED,
+            detail=f"Account is locked due to too many failed attempts. Try again in {remaining_time} minutes."
+        )
+
+    # Verify password
+    if not verify_password(credentials.password, user.hashed_password):
+        # Increment failed attempts
+        user.failed_login_attempts += 1
+
+        # Lock account after 5 failed attempts
+        if user.failed_login_attempts >= 5:
+            user.locked_until = datetime.utcnow() + timedelta(minutes=30)  # Lock for 30 minutes
+            await db.commit()
+            raise HTTPException(
+                status_code=status.HTTP_423_LOCKED,
+                detail="Account locked due to too many failed attempts. Try again in 30 minutes."
+            )
+
+        await db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid email or password"
+        )
+
     if not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Account is disabled"
         )
-    
+
     # Check MFA if enabled
     if user.mfa_enabled:
         if not credentials.totp_code:
@@ -141,16 +169,25 @@ async def login(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="TOTP code required"
             )
-        # Verify TOTP code here
-    
-    # Update last login
+        # Verify TOTP code
+        import pyotp
+        totp = pyotp.TOTP(user.mfa_secret)
+        if not totp.verify(credentials.totp_code):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid TOTP code"
+            )
+
+    # Reset failed attempts on successful login
+    user.failed_login_attempts = 0
+    user.locked_until = None
     user.last_login = datetime.utcnow()
     await db.commit()
-    
+
     # Create tokens
     access_token = create_access_token(subject=user.id)
     refresh_token = create_refresh_token(subject=user.id)
-    
+
     return Token(
         access_token=access_token,
         refresh_token=refresh_token,

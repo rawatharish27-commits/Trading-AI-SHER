@@ -7,8 +7,10 @@ import os
 from functools import lru_cache
 from pathlib import Path
 from typing import List
+from loguru import logger
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from app.core.security import security_audit
 
 
 # Get the backend directory path
@@ -36,21 +38,100 @@ class Settings(BaseSettings):
     port: int = 8000
     workers: int = 4
 
-    # Database
-    database_url: str = "postgresql+asyncpg://trading_user:trading_password@localhost:5432/trading_engine"
-    timescale_url: str = "postgresql+asyncpg://trading_user:trading_password@localhost:5433/trading_engine"
+    # Database - Environment-specific defaults
+    database_url: str = ""
+    timescale_url: str = ""
+
+    @property
+    def effective_database_url(self) -> str:
+        """Get the effective database URL based on environment"""
+        if self.database_url:
+            return self.database_url
+
+        # Environment-specific defaults
+        if self.environment == "production":
+            return "postgresql+asyncpg://trading_user:trading_password@localhost:5432/trading_engine"
+        else:
+            # Development/Testing - use SQLite
+            db_path = BACKEND_DIR / "sher.db"
+            return f"sqlite+aiosqlite:///{db_path}"
+
+    @property
+    def effective_timescale_url(self) -> str:
+        """Get the effective TimescaleDB URL based on environment"""
+        if self.timescale_url:
+            return self.timescale_url
+
+        # Environment-specific defaults
+        if self.environment == "production":
+            return "postgresql+asyncpg://trading_user:trading_password@localhost:5433/trading_engine"
+        else:
+            # Development/Testing - use same SQLite database
+            db_path = BACKEND_DIR / "sher.db"
+            return f"sqlite+aiosqlite:///{db_path}"
 
     # Security
-    secret_key: str = "your-super-secret-key-change-in-production"
+    secret_key: str
     access_token_expire_minutes: int = 1440  # 24 hours
     refresh_token_expire_days: int = 7
     algorithm: str = "HS256"
 
-    # Angel One Broker
-    angel_one_api_key: str = ""
-    angel_one_client_id: str = ""
-    angel_one_password: str = ""
-    angel_one_totp_secret: str = ""
+    def __init__(self, **data):
+        super().__init__(**data)
+        if not self.secret_key:
+            raise ValueError("SECRET_KEY environment variable is required")
+        if len(self.secret_key) < 32:
+            raise ValueError("SECRET_KEY must be at least 32 characters long")
+
+    # Angel One Broker (Encrypted)
+    angel_one_api_key_encrypted: str = ""
+    angel_one_client_id_encrypted: str = ""
+    angel_one_password_encrypted: str = ""
+    angel_one_totp_secret_encrypted: str = ""
+
+    @property
+    def angel_one_api_key(self) -> str:
+        """Decrypt Angel One API key"""
+        if not self.angel_one_api_key_encrypted:
+            return ""
+        try:
+            from app.core.security import data_encryption
+            return data_encryption.decrypt_data(self.angel_one_api_key_encrypted)
+        except Exception:
+            return ""
+
+    @property
+    def angel_one_client_id(self) -> str:
+        """Decrypt Angel One client ID"""
+        if not self.angel_one_client_id_encrypted:
+            return ""
+        try:
+            from app.core.security import data_encryption
+            return data_encryption.decrypt_data(self.angel_one_client_id_encrypted)
+        except Exception:
+            return ""
+
+    @property
+    def angel_one_password(self) -> str:
+        """Decrypt Angel One password"""
+        if not self.angel_one_password_encrypted:
+            return ""
+        try:
+            from app.core.security import data_encryption
+            return data_encryption.decrypt_data(self.angel_one_password_encrypted)
+        except Exception:
+            return ""
+
+    @property
+    def angel_one_totp_secret(self) -> str:
+        """Decrypt Angel One TOTP secret"""
+        if not self.angel_one_totp_secret_encrypted:
+            return ""
+        try:
+            from app.core.security import data_encryption
+            return data_encryption.decrypt_data(self.angel_one_totp_secret_encrypted)
+        except Exception:
+            return ""
 
     # AI/ML Configuration
     ml_model_path: str = "./models"
@@ -103,17 +184,24 @@ class Settings(BaseSettings):
     smc_backtest_mode: bool = False
     smc_debug_logging: bool = False
 
-    # CORS
-    cors_origins: str = '["http://localhost:3000","http://localhost:5173"]'
+    # CORS - Environment specific
+    cors_origins_dev: str = '["http://localhost:3000","http://localhost:5173","http://127.0.0.1:3000","http://127.0.0.1:5173"]'
+    cors_origins_prod: str = '["https://yourdomain.com","https://app.yourdomain.com"]'
 
     @property
     def cors_origins_list(self) -> List[str]:
-        """Parse CORS origins from string"""
+        """Parse CORS origins based on environment"""
         import json
         try:
-            return json.loads(self.cors_origins)
-        except:
-            return ["http://localhost:3000"]
+            if self.environment == "production":
+                origins_str = self.cors_origins_prod
+            else:
+                origins_str = self.cors_origins_dev
+            return json.loads(origins_str)
+        except Exception as e:
+            logger.warning(f"Failed to parse CORS origins: {e}")
+            # Secure default - no origins allowed in production
+            return [] if self.environment == "production" else ["http://localhost:3000"]
 
     @property
     def smc_symbol_configs_dict(self) -> dict:
@@ -121,7 +209,8 @@ class Settings(BaseSettings):
         import json
         try:
             return json.loads(self.smc_symbol_configs)
-        except:
+        except Exception as e:
+            logger.warning(f"Failed to parse SMC symbol configs: {e}")
             return {"default": {"ltf_timeframe": "15m", "htf_timeframe": "1h", "min_quality": 0.6}}
 
     def get_smc_config_for_symbol(self, symbol: str) -> dict:
@@ -140,6 +229,144 @@ class Settings(BaseSettings):
         ltf = config.get("ltf_timeframe", self.smc_ltf_timeframe)
         htf = config.get("htf_timeframe", self.smc_htf_timeframe)
         return ltf, htf
+
+    def audit_configuration_change(
+        self,
+        user_id: int,
+        config_key: str,
+        old_value: str,
+        new_value: str,
+        change_reason: str,
+        ip_address: str,
+        user_agent: str
+    ) -> None:
+        """
+        Audit configuration changes for compliance
+
+        Args:
+            user_id: User making the change
+            config_key: Configuration key being changed
+            old_value: Previous value
+            new_value: New value
+            change_reason: Reason for the change
+            ip_address: IP address of the user
+            user_agent: User agent string
+        """
+        try:
+            # Log configuration change audit
+            security_audit.log_system_configuration_change(
+                user_id=user_id,
+                config_section="application_config",
+                config_key=config_key,
+                old_value=old_value,
+                new_value=new_value,
+                change_reason=change_reason,
+                ip_address=ip_address,
+                user_agent=user_agent
+            )
+
+            logger.info(f"Configuration change audited: {config_key} by user {user_id}")
+
+        except Exception as e:
+            logger.error(f"Failed to audit configuration change: {e}")
+
+    def validate_configuration_on_startup(self) -> List[str]:
+        """
+        Validate configuration on application startup
+
+        Returns:
+            List of validation errors
+        """
+        errors = []
+
+        # Check required environment variables
+        required_vars = [
+            'SECRET_KEY',
+            'DATABASE_URL' if self.environment == 'production' else None
+        ]
+
+        for var in required_vars:
+            if var and not os.getenv(var):
+                errors.append(f"Required environment variable {var} is not set")
+
+        # Validate SECRET_KEY length
+        if len(self.secret_key) < 32:
+            errors.append("SECRET_KEY must be at least 32 characters long")
+
+        # Validate database URLs
+        if self.environment == 'production':
+            if not self.database_url.startswith('postgresql'):
+                errors.append("Production database URL must use PostgreSQL")
+
+        # Validate CORS origins
+        if self.environment == 'production' and not self.cors_origins_list:
+            errors.append("Production CORS origins cannot be empty")
+
+        # Validate SMC configuration
+        if self.smc_min_quality_score < 0 or self.smc_min_quality_score > 1:
+            errors.append("SMC minimum quality score must be between 0 and 1")
+
+        if self.smc_min_confidence < 0 or self.smc_min_confidence > 1:
+            errors.append("SMC minimum confidence must be between 0 and 1")
+
+        # Log validation results
+        if errors:
+            logger.error(f"Configuration validation failed: {len(errors)} errors")
+            for error in errors:
+                logger.error(f"  - {error}")
+        else:
+            logger.info("Configuration validation passed")
+
+        return errors
+
+    def get_configuration_snapshot(self) -> dict:
+        """
+        Get a snapshot of current configuration for audit purposes
+
+        Returns:
+            Dictionary of configuration values (sanitized)
+        """
+        # Get all settings as dict
+        config_dict = self.model_dump()
+
+        # Remove sensitive information
+        sensitive_keys = [
+            'secret_key',
+            'angel_one_api_key_encrypted',
+            'angel_one_client_id_encrypted',
+            'angel_one_password_encrypted',
+            'angel_one_totp_secret_encrypted',
+            'gemini_api_key',
+            'redis_password'
+        ]
+
+        for key in sensitive_keys:
+            if key in config_dict:
+                config_dict[key] = "***REDACTED***"
+
+        return config_dict
+
+    def export_configuration_for_audit(self, export_path: Path) -> None:
+        """
+        Export current configuration for audit purposes
+
+        Args:
+            export_path: Path to export configuration
+        """
+        try:
+            config_snapshot = self.get_configuration_snapshot()
+            config_snapshot['export_timestamp'] = datetime.utcnow().isoformat()
+            config_snapshot['export_reason'] = 'audit_export'
+
+            with open(export_path, 'w') as f:
+                import json
+                json.dump(config_snapshot, f, indent=2, default=str)
+
+            logger.info(f"Configuration exported for audit: {export_path}")
+
+        except Exception as e:
+            logger.error(f"Failed to export configuration: {e}")
+            raise
 
 
 @lru_cache

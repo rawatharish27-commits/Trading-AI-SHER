@@ -13,6 +13,8 @@ from datetime import datetime
 
 from loguru import logger
 
+from app.core.config import settings
+
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
     """
@@ -181,5 +183,44 @@ class CORSSecurityMiddleware(BaseHTTPMiddleware):
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["X-XSS-Protection"] = "1; mode=block"
         response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
-        
+
+        return response
+
+
+class APIVersionMiddleware(BaseHTTPMiddleware):
+    """
+    API Version Middleware
+
+    Adds version headers to API responses:
+    - X-API-Version: Current API version
+    - X-API-Deprecated: If endpoint is deprecated
+    """
+
+    def __init__(self, app, current_version: str = "v1", deprecated_versions: list = None):
+        super().__init__(app)
+        self.current_version = current_version
+        self.deprecated_versions = deprecated_versions or []
+
+    async def dispatch(self, request: Request, call_next: Callable) -> Response:
+        response = await call_next(request)
+
+        # Add version headers
+        response.headers["X-API-Version"] = self.current_version
+        response.headers["X-API-Current-Version"] = settings.app_version
+
+        # Check if this is an API endpoint
+        if request.url.path.startswith("/api/"):
+            # Extract version from path
+            path_parts = request.url.path.split("/")
+            if len(path_parts) >= 3 and path_parts[2].startswith("v"):
+                version = path_parts[2]
+                if version in self.deprecated_versions:
+                    response.headers["X-API-Deprecated"] = "true"
+                    response.headers["X-API-Deprecation-Message"] = f"API version {version} is deprecated. Please migrate to {self.current_version}."
+                    response.headers["X-API-Deprecation-Date"] = "2024-12-31"  # Example deprecation date
+                    response.headers["X-API-Sunset"] = "2025-06-30"  # Example sunset date
+
+                    # Log deprecation warning
+                    logger.warning(f"Deprecated API version used: {version} for path {request.url.path}")
+
         return response

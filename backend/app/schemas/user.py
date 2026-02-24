@@ -22,6 +22,34 @@ class UserCreate(UserBase):
     password: str = Field(..., min_length=8, max_length=100)
     confirm_password: str = Field(..., min_length=8, max_length=100)
 
+    @field_validator('password')
+    @classmethod
+    def validate_password_complexity(cls, v: str) -> str:
+        """Validate password complexity requirements"""
+        import re
+
+        if len(v) < 8:
+            raise ValueError('Password must be at least 8 characters long')
+
+        if not re.search(r'[A-Z]', v):
+            raise ValueError('Password must contain at least one uppercase letter')
+
+        if not re.search(r'[a-z]', v):
+            raise ValueError('Password must contain at least one lowercase letter')
+
+        if not re.search(r'\d', v):
+            raise ValueError('Password must contain at least one digit')
+
+        if not re.search(r'[!@#$%^&*(),.?":{}|<>]', v):
+            raise ValueError('Password must contain at least one special character')
+
+        # Check for common weak passwords
+        weak_passwords = ['password', '12345678', 'qwerty', 'abc123', 'password123']
+        if v.lower() in weak_passwords:
+            raise ValueError('Password is too common, please choose a stronger password')
+
+        return v
+
     @field_validator('confirm_password')
     @classmethod
     def passwords_match(cls, v: str, info) -> str:

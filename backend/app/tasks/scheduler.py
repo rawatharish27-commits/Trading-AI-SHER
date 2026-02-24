@@ -302,5 +302,74 @@ async def sync_broker_positions():
     return {"status": "completed"}
 
 
+async def automated_database_backup():
+    """Create automated database backup"""
+    from app.services.backup_service import create_automated_backup
+
+    logger.info("💾 Creating automated database backup...")
+    try:
+        backup_path = await create_automated_backup()
+        logger.info(f"✅ Automated backup completed: {backup_path}")
+        return {"status": "completed", "backup_path": backup_path}
+    except Exception as e:
+        logger.error(f"❌ Automated backup failed: {e}")
+        raise
+
+
+async def cleanup_old_backups():
+    """Clean up old backup files"""
+    from app.services.backup_service import schedule_backup_cleanup
+
+    logger.info("🧹 Cleaning up old backup files...")
+    try:
+        deleted_count = await schedule_backup_cleanup()
+        logger.info(f"✅ Backup cleanup completed: {deleted_count} files removed")
+        return {"status": "completed", "deleted_count": deleted_count}
+    except Exception as e:
+        logger.error(f"❌ Backup cleanup failed: {e}")
+        raise
+
+
+async def verify_backup_integrity():
+    """Verify backup integrity"""
+    from app.services.backup_service import backup_service
+
+    logger.info("🔍 Verifying backup integrity...")
+    try:
+        backups = await backup_service.list_backups()
+        verified_count = 0
+        failed_count = 0
+
+        for backup in backups[:5]:  # Check last 5 backups
+            if backup.get("file_exists"):
+                backup_file = f"backups/{backup['backup_name']}.json.gz.enc"
+                verification = await backup_service.verify_backup(backup_file)
+                if verification.get("valid"):
+                    verified_count += 1
+                else:
+                    failed_count += 1
+                    logger.warning(f"❌ Backup verification failed: {backup['backup_name']}")
+
+        logger.info(f"✅ Backup verification completed: {verified_count} valid, {failed_count} failed")
+        return {"status": "completed", "verified": verified_count, "failed": failed_count}
+    except Exception as e:
+        logger.error(f"❌ Backup verification failed: {e}")
+        raise
+
+
+async def data_retention_cleanup():
+    """Run automated data retention cleanup"""
+    from app.services.data_retention_service import run_data_retention_cleanup
+
+    logger.info("🧹 Running automated data retention cleanup...")
+    try:
+        results = await run_data_retention_cleanup()
+        logger.info(f"✅ Data retention cleanup completed: {results.get('total_records_deleted', 0)} deleted, {results.get('total_records_anonymized', 0)} anonymized")
+        return results
+    except Exception as e:
+        logger.error(f"❌ Data retention cleanup failed: {e}")
+        raise
+
+
 # Singleton instance
 task_scheduler = TaskScheduler()
